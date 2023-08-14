@@ -398,7 +398,7 @@ class Search():
         mid0 = to - prev
         mid1 = fr + prev
 
-        assert (mid0 in self.samples) or (mid1 in self.samples)
+        assert (mid0 in self.samples) or (mid1 in self.samples), f'{self.samples=}'
         # -- The key idea of the Fibonacci search is that one of these points we will have seen before.
 
         y0 = self.probe(mid0)
