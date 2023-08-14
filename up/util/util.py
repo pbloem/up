@@ -330,8 +330,7 @@ def find_batch_size(model, loss, input, opt=None, upper=2000, samples=10, burn_i
         opt = torch.optim.Adam(params=model.parameters(), lr=3e-4)
 
     search = Search(
-        lambda b : float('inf') if b < 1 else throughput(b, model, loss, input, opt, samples=samples, burn_in=burn_in),
-        max_x=upper)
+        lambda b : throughput(b, model, loss, input, opt, samples=samples, burn_in=burn_in), max_x=upper)
 
     if all(y == float('inf') for y in search.y):
         raise Exception(f'All batch sizes led to (most likely indicating out-of-memory errors). Batch sizes sampled: {search.x}. Throughputs: {search.y}')
@@ -414,6 +413,9 @@ def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10):
     :return:
     """
 
+    if batch_size < 1:
+        return float('-inf')
+
     try :
         batch = [i.expand(batch_size, *i.size()[1:]).contiguous() for i in input]
 
@@ -439,17 +441,17 @@ def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10):
 
         return total_instances / total_time
 
-    except RuntimeError as e:
-        message = getattr(e, 'message', repr(e))
-        if 'memory' not in message:
-            print(f'Runtime error for batch size {batch_size}. Treating this as out-of-memory (i.e. infinite '
-                          f'throughput), but it seems to be something else. Please inspect the error below.')
-            print(e)
-        else:
-            print(f'OOM (error caught {message}).')
+    except torch.OutOfMemoryError as e:
+        # message = getattr(e, 'message', repr(e))
+        # if 'memory' not in message:
+        #     print(f'Runtime error for batch size {batch_size}. Treating this as out-of-memory (i.e. infinite '
+        #                   f'throughput), but it seems to be something else. Please inspect the error below.')
+        #     print(e)
+        # else:
+        #     print(f'OOM (error caught {message}).')
         torch.cuda.empty_cache()
 
-        return float('inf')
+        return float('-inf')
 
 SQRT5 = math.sqrt(5)
 PHI = 1.61803398874989484820
