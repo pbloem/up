@@ -333,7 +333,10 @@ def find_batch_size(model, loss, input, opt=None, upper=2000, samples=10, burn_i
         lambda b : throughput(b, model, loss, input, opt, samples=samples, burn_in=burn_in), max_x=upper)
 
     if all(y == float('inf') for y in search.y):
-        raise Exception(f'All batch sizes led to (most likely indicating out-of-memory errors). Batch sizes sampled: {search.x}. Throughputs: {search.y}')
+        raise Exception(f'All batch sizes led to out-of-memory errors. Batch sizes sampled: {search.x}. Throughputs: {search.y}')
+
+    if search.opt == upper:
+        warnings.warn('The best batch size found was the upper bound of the search interval. You may want to try again with a higher value for `upper`.')
 
     if wandb is not None:
         table = wandb.Table(data=[[x, y] for (x, y) in zip(search.x, search.y)],
@@ -378,7 +381,7 @@ class Search():
         return y
 
     def search(self, fr:int, to:int, depth:int):
-        print(fr, to, depth)
+        print(f'-- testing interval ({fr}, {to}) (recursion depth {depth})')
 
         range = to - fr
 
