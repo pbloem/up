@@ -441,7 +441,7 @@ def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10):
 
         return total_instances / total_time
 
-    except torch.OutOfMemoryError as e:
+    except torch.cuda.OutOfMemoryError as e:
         # message = getattr(e, 'message', repr(e))
         # if 'memory' not in message:
         #     print(f'Runtime error for batch size {batch_size}. Treating this as out-of-memory (i.e. infinite '
