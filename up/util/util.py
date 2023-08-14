@@ -9,6 +9,8 @@ from collections.abc import Iterable
 import os, math, tqdm, time
 from tqdm import trange
 
+import warnings
+
 tics = []
 
 def tic():
@@ -331,6 +333,9 @@ def find_batch_size(model, loss, input, opt=None, upper=2000, samples=10, burn_i
         lambda b : float('inf') if b < 1 else throughput(b, model, loss, input, opt, samples=samples, burn_in=burn_in),
         max_x=upper)
 
+    if all(y == float('inf') for y in search.y):
+        raise Exception(f'All batch sizes led to (most likely indicating out-of-memory errors). Batch sizes sampled: {search.x}. Throughputs: {search.y}')
+
     if wandb is not None:
         table = wandb.Table(data=[[x, y] for (x, y) in zip(search.x, search.y)],
                             columns=['batch_sizes', 'throughputs'])
@@ -434,8 +439,10 @@ def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10):
 
         return total_instances / total_time
 
-    except RuntimeError:
+    except RuntimeError as e:
+        warnings.warn(f'Runtime error for batch size {batch_size}. Returning inf throughput.' + str(e))
         torch.cuda.empty_cache()
+
         return float('inf')
 
 SQRT5 = math.sqrt(5)
