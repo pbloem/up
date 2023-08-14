@@ -85,6 +85,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
             'wp'   : torch.tensor(load_data('wp-val'), dtype=torch.long)
         }
 
+    scaler = torch.cuda.amp.GradScaler()
+
     # Computation source
     cmp_source = \
         up.ConditionalTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS) \
@@ -107,7 +109,9 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
     if model_batch_size is None:
         print('Starting throughput test.'); tic()
-        model_batch_size, batch_sizes, throughputs = up.util.find_batch_size(model=model, loss=dummy_loss, input=dummy_input, burn_in=3, samples=20, wandb=wandb)
+        model_batch_size, batch_sizes, throughputs = up.util.find_batch_size(model=model, loss=dummy_loss,
+                                                                             input=dummy_input, burn_in=3, samples=20,
+                                                                             wandb=wandb, use_amp=True)
 
         print(f'Finished ({toc():.4}s). Optimal batch size: {model_batch_size}. Batch sizes tested {batch_sizes}, with throughput {throughputs}.')
 
@@ -166,7 +170,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     #    we are training (which is always autoregressive).
 
                     seed = torch.randint(low=0, high=NUM_TOKENS, size=(sample_batch_size, 1), device=d())
-                    batch = sample_sequence(cmp_source, seed, context, num_tokens=NUM_TOKENS, length=context,
+                    with torch.cuda.amp.autocast():
+                        batch = sample_sequence(cmp_source, seed, context, num_tokens=NUM_TOKENS, length=context,
                                          temperature=temperature,
                                          conditional=z)
 
@@ -181,7 +186,9 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     #    that this results in more internal correlation in the samples. That is, the value of one token can
                     #    be inferred from other parts of the sequence more easily.
 
-                    output = cmp_source(z)
+                    with torch.cuda.amp.autocast():
+                        output = cmp_source(z)
+
                     output = sample(output, temperature=temperature)
 
                     # mask out random columns for the model to replace
@@ -206,11 +213,20 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                 input  = batch[:, :-1]
                 target = batch[:, 1:]
 
-                output = model(input)
-                loss = F.cross_entropy(output.transpose(2, 1), target)
+                with torch.cuda.amp.autocast():
+                    output = model(input)
+                    loss = F.cross_entropy(output.transpose(2, 1), target)
 
-                loss.backward()
-                opt.step()
+                scaler.scale(loss).backward()
+                scaler.step(opt)
+                scaler.update()
+
+                if warmup > 0:
+                    sch.step()
+
+                # loss.backward()
+                # opt.step()
+
             traintime = toc()
 
             wandb.log({
@@ -223,9 +239,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
             })
             bar.set_postfix({'loss': f'{loss:.02}'})
-
-            if warmup > 0:
-                  sch.step()
 
             if i % print_every == 0:
 
@@ -268,8 +281,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                 wandb.log({f'val-{name}': est})
 
         opt.zero_grad()
-        if warmup > 0:
-              sch.step()
 
         # sample a batch from the data
         source, target = sample_batch(data, context, model_batch_size)
@@ -277,11 +288,16 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         if torch.cuda.is_available():
             source, target = source.cuda(), target.cuda()
 
-        output = model(source)
-        loss = F.cross_entropy(output.transpose(2, 1), target)
+        with torch.cuda.amp.autocast():
+            output = model(source)
+            loss = F.cross_entropy(output.transpose(2, 1), target)
 
-        loss.backward()
-        opt.step()
+        scaler.scale(loss).backward()
+        scaler.step(opt)
+        scaler.update()
+
+        if warmup > 0:
+              sch.step()
 
         wandb.log({
             'loss': loss,

@@ -308,7 +308,7 @@ def sample(lnprobs, temperature=1.0):
 invphi = (math.sqrt(5) - 1) / 2  # 1 / phi
 invphi2 = (3 - math.sqrt(5)) / 2  # 1 / phi^2
 
-def find_batch_size(model, loss, input, opt=None, upper=2000, samples=10, burn_in=10, wandb=None):
+def find_batch_size(model, loss, input, opt=None, upper=2000, samples=10, burn_in=10, wandb=None, use_amp=False):
     """
     Runs a fibonacci search over batch sizes to find the one with the highest throughput
 
@@ -330,7 +330,7 @@ def find_batch_size(model, loss, input, opt=None, upper=2000, samples=10, burn_i
         opt = torch.optim.Adam(params=model.parameters(), lr=3e-4)
 
     search = Search(
-        lambda b : throughput(b, model, loss, input, opt, samples=samples, burn_in=burn_in), max_x=upper)
+        lambda b : throughput(b, model, loss, input, opt, samples=samples, burn_in=burn_in, use_amp=use_amp), max_x=upper)
 
     if all(y == float('inf') for y in search.y):
         raise Exception(f'All batch sizes led to out-of-memory errors. Batch sizes sampled: {search.x}. Throughputs: {search.y}')
@@ -343,6 +343,7 @@ def find_batch_size(model, loss, input, opt=None, upper=2000, samples=10, burn_i
                             columns=['batch_sizes', 'throughputs'])
         plot = wandb.plot.line(table=table, x='batch_sizes', y='throughputs', title='throughput test')
         wandb.log({'throughput test': plot})
+        wandb.config['throughput-test-result'] = search.opt
 
     return search.opt, search.x, search.y
 
@@ -412,7 +413,7 @@ class Search():
         # -- Note that if all points are equal, we move to the lower interval. This is because it's possible that all
         #    points are -inf, because we get OOM at the current sizes. In that case, we want to move down.
 
-def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10):
+def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10, use_amp):
     """
     Returns the throughput in number of instances per second.
 
@@ -422,6 +423,25 @@ def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10):
     :return:
     """
 
+    scaler = torch.cuda.amp.GradScaler()
+
+    def loop_inner():
+        opt.zero_grad()
+
+        if use_amp:
+            with torch.cuda.amp.autocast():
+                l = loss(model(*batch))
+
+            scaler.scale(l).backward()
+            scaler.step(opt)
+            scaler.update()
+
+        else:
+            l = loss(model(*batch))
+
+            l.backward()
+            opt.step()
+
     if batch_size < 1:
         return float('-inf')
 
@@ -429,21 +449,11 @@ def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10):
         batch = [i.expand(batch_size, *i.size()[1:]).contiguous() for i in input]
 
         for _ in range(burn_in):
-            opt.zero_grad()
-
-            output = model(*batch)
-            l = loss(output)
-            l.backward()
-            opt.step()
+            loop_inner()
 
         tic()
         for _ in range(samples):
-            opt.zero_grad()
-
-            output = model(*batch)
-            l = loss(output)
-            l.backward()
-            opt.step()
+            loop_inner()
 
         total_time = toc()
         total_instances = samples * batch_size
