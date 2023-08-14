@@ -85,8 +85,13 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
     # Target for training
     model  = up.GTransformer(emb=emb, heads=heads, depth=mdepth, seq_length=context, num_tokens=NUM_TOKENS)
-    dummy_input  = torch.randint(low=0, high=NUM_TOKENS, size=(1, context), dtype=torch.long, device=d())
 
+    if torch.cuda.is_available():
+        cmp_source.cuda()
+        model.cuda()
+
+    # Throughput test to find batch size
+    dummy_input  = torch.randint(low=0, high=NUM_TOKENS, size=(1, context), dtype=torch.long, device=d())
     def dummy_loss(output):
         b, c, e = output.size()
         dummy_target = torch.randint(low=0, high=NUM_TOKENS, size=(b, c), dtype=torch.long, device=d())
@@ -96,10 +101,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     model_batch_size, batch_sizes, throughputs = up.util.find_batch_size(model=model, loss=dummy_loss, input=dummy_input, burn_in=10, samples=20, wandb=wandb)
 
     print(f'Finished ({toc():.4}s). Optimal batch size: {model_batch_size}. Batch sizes tested {batch_sizes}, with throughput {throughputs}.')
-
-    if torch.cuda.is_available():
-        cmp_source.cuda()
-        model.cuda()
 
     opt = torch.optim.Adam(lr=lr, params=model.parameters())
     if warmup > 0:

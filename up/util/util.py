@@ -440,7 +440,13 @@ def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10):
         return total_instances / total_time
 
     except RuntimeError as e:
-        warnings.warn(f'Runtime error for batch size {batch_size}. Returning inf throughput.' + str(e))
+        message = getattr(e, 'message', repr(e))
+        if 'memory' not in message:
+            print(f'Runtime error for batch size {batch_size}. Treating this as out-of-memory (i.e. infinite '
+                          f'throughput), but it seems to be something else. Please inspect the error below.')
+            print(e)
+        else:
+            print(f'OOM (error caught {message}).')
         torch.cuda.empty_cache()
 
         return float('inf')
