@@ -369,6 +369,7 @@ class Search():
         self.opt, opty = -1, float('-inf')
         for x, y in self.samples.items():
             if y > opty:
+                opty = y
                 self.opt = x
 
     def probe(self, x):
@@ -376,7 +377,7 @@ class Search():
             y = self.function(x)
             self.samples[x] = y
         else:
-            y= self.samples[x]
+            y = self.samples[x]
 
         return y
 
@@ -401,9 +402,9 @@ class Search():
         y1 = self.probe(mid1)
 
         if y0 > y1:
-            self.search(mid0, to, depth+1)
+            self.search(fr, mid1, depth + 1)
         else:
-            self.search(fr, mid1, depth+1)
+            self.search(mid0, to, depth + 1)
 
 
 def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10):
