@@ -413,7 +413,7 @@ class Search():
         # -- Note that if all points are equal, we move to the lower interval. This is because it's possible that all
         #    points are -inf, because we get OOM at the current sizes. In that case, we want to move down.
 
-def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10, use_amp):
+def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10, use_amp=False):
     """
     Returns the throughput in number of instances per second.
 
