@@ -260,18 +260,18 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     # -- We keep the same optimizer (the statistics may well carry over from pre-training to finetuning)
     #    but we reset the learning rate warmup.
 
-    data = torch.tensor(up.data.load_data('wp-train'), device='cpu')
+    traindata = torch.tensor(up.data.load_data('wp-train'), device='cpu')
 
     for i in (bar := trange(num_batches)):
         if eval_every > 0 and i % eval_every == 0 and not skip_eval:
 
-            for name, data in datasets.items():
+            for name, valdata in datasets.items():
                 print(f'evaluating {name}')
 
                 with torch.no_grad():
                     est = estimate_compression(
                         model=model,
-                        data=data,
+                        data=valdata,
                         nsamples=eval_samples,
                         context=context,
                         batch_size=model_batch_size * 2,
@@ -283,7 +283,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         opt.zero_grad()
 
         # sample a batch from the data
-        source, target = sample_batch(data, context, model_batch_size)
+        source, target = sample_batch(traindata, context, model_batch_size)
 
         if torch.cuda.is_available():
             source, target = source.cuda(), target.cuda()
