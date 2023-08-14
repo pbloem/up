@@ -107,7 +107,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
     if model_batch_size is None:
         print('Starting throughput test.'); tic()
-        model_batch_size, batch_sizes, throughputs = up.util.find_batch_size(model=model, loss=dummy_loss, input=dummy_input, burn_in=3, samples=7, wandb=wandb)
+        model_batch_size, batch_sizes, throughputs = up.util.find_batch_size(model=model, loss=dummy_loss, input=dummy_input, burn_in=3, samples=20, wandb=wandb)
 
         print(f'Finished ({toc():.4}s). Optimal batch size: {model_batch_size}. Batch sizes tested {batch_sizes}, with throughput {throughputs}.')
 
