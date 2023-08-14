@@ -404,11 +404,13 @@ class Search():
         y0 = self.probe(mid0)
         y1 = self.probe(mid1)
 
-        if y0 > y1:
-            self.search(fr, mid1, depth + 1)
-        else:
+        if y0 < y1:
             self.search(mid0, to, depth + 1)
+        else:
+            self.search(fr, mid1, depth + 1)
 
+        # -- Note that if all points are equal, we move to the lower interval. This is because it's possible that all
+        #    points are -inf, because we get OOM at the current sizes. In that case, we want to move down.
 
 def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10):
     """
