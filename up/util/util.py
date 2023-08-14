@@ -361,7 +361,7 @@ class Search():
 
         self.max_x = max_x if FIB.is_fibonacci(max_x) else FIB.next(max_x)
 
-        self.search(0, max_x, 0)
+        self.search(0, self.max_x, 0)
 
         self.x = [k for k, _ in self.samples.items()]
         self.y = [v for _, v in self.samples.items()]
@@ -397,6 +397,9 @@ class Search():
         prev = FIB.previous(range)
         mid0 = to - prev
         mid1 = fr + prev
+
+        assert (mid0 in self.samples) or (mid1 in self.samples)
+        # -- The key idea of the Fibonacci search is that one of these points we will have seen before.
 
         y0 = self.probe(mid0)
         y1 = self.probe(mid1)
