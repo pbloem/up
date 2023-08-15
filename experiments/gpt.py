@@ -274,7 +274,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                         data=valdata,
                         nsamples=eval_samples,
                         context=context,
-                        batch_size=model_batch_size * 2,
+                        batch_size=int(model_batch_size * 1.8),
                         model_produces_logits=True
                     )
 
