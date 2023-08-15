@@ -469,7 +469,12 @@ def throughput(batch_size, model, loss, input, opt, samples=10, burn_in=10, use_
         # else:
         #     print(f'OOM (error caught {message}).')
         torch.cuda.empty_cache()
+        return float('-inf')
 
+    except RuntimeError as e:
+        warnings.warn(f"Caught runtime error at {batch_size=}. Treating as OOM (if it is not, there may be an issue with your code). {repr(e)}")
+
+        torch.cuda.empty_cache()
         return float('-inf')
 
 SQRT5 = math.sqrt(5)
