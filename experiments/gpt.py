@@ -55,7 +55,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          debug=False, warmup=100_000, eval_every=5_000, print_every=500, gc=1.0,
          sequential=False, eval_samples=10_000, steps_per_sample=1, mlm_prob=0.15, ascii_only=False,
          init_mult_max=5.0, mask_prob_max=0.7, nonlinearity='relu', skip_eval=False, eval_ood=False,
-         name=None
+         name=None, eval_batch_mult=2.0
        ):
 
     """
@@ -139,7 +139,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                             data=data,
                             nsamples=eval_samples,
                             context=context,
-                            batch_size=model_batch_size * 2,
+                            batch_size=int(model_batch_size * eval_batch_mult),
                             model_produces_logits=True
                         )
 
@@ -274,7 +274,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                         data=valdata,
                         nsamples=eval_samples,
                         context=context,
-                        batch_size=int(model_batch_size * 1.8),
+                        batch_size=int(model_batch_size * eval_batch_mult),
                         model_produces_logits=True
                     )
 
