@@ -108,16 +108,6 @@ def sample(lnprobs, temperature=1.0):
 
 def weights_init(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0):
 
-    if hasattr(model, 'alphas'):
-        model.alphas = torch.bernoulli(torch.full_like(model.alphas, fill_value=0.5))
-        model.betas  = torch.bernoulli(torch.full_like(model.betas, fill_value=0.5))
-
-    # if hasattr(model, 'coords0'):
-    #     mult = random.random() * 2
-    #     model.coords0 *= mult
-    #     model.coords1 *= mult
-    #     model.coords2 *= mult
-
     for mod in model.modules():
         if type(mod) is nn.Linear or type(mod) is nn.Embedding or \
                 type(mod) is nn.Conv2d or type(mod) is nn.ConvTranspose2d:
@@ -321,12 +311,96 @@ def print_batch(batch, ascii_only):
     print()
 
 
-def run_sample(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sample_batch_size=100,
+def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
+         buffer_size=20,
+         reset_prob=0.01, max_depth=30, tags=[],
+         debug=False, warmup=100_000, eval_every=5_000, print_every=500, gc=1.0,
+         sequential=False, eval_samples=10_000, steps_per_sample=1, mlm_prob=0.15, ascii_only=False,
+         init_mult_max=1.0, mask_prob_max=1.0
+       ):
+    """
+    Samples from the "universal" distribution at every n.
+    """
+
+    wd = wandb.init(
+        project='prior',
+        tags=tags,
+        config=locals(),
+        mode= 'disabled' if debug else 'online'
+    )
+
+    # Computation source
+    cmp_source = \
+        ConditionalTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=num_tokens(ascii_only)) \
+        if sequential else \
+        GTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=num_tokens(ascii_only), mask_channel=True)
+
+    if torch.cuda.is_available():
+        cmp_source.cuda()
+
+    buffer = torch.randint(low=0, high=num_tokens(ascii_only), size=(buffer_size, context), device=d())
+
+    for n in range(max_depth):
+
+        print(n)
+        print_batch(buffer, ascii_only)
+        print()
+
+        for i in trange(buffer_size):
+
+            with torch.no_grad():
+
+                # Re-initialize the parameters of source (i.e. sample a random source)
+                weights_init(cmp_source, init_mult_max=init_mult_max, mask_prob_max=mask_prob_max)
+
+                z = buffer[i:i+1]
+
+                # pass it through a randomly chosen model
+                if sequential:
+                    # -- In sequential mode we autoregressively sample, with z as a conditional input
+                    #    This is very slow, but the computational patterns we expect to see are closer to those of the model
+                    #    we are training (which is always autoregressive).
+
+                    seed = torch.randint(low=0, high=num_tokens(ascii_only), size=(sample_batch_size, 1), device=d())
+                    batch = sample_sequence(cmp_source, seed, context, num_tokens=num_tokens(ascii_only), length=context,
+                                         temperature=temperature,
+                                         conditional=z)
+
+                    buffer[i, :] = batch[:, :-1]
+
+                else:
+                    # -- In non-sequential mode, we follow the MLM strategy. We sample output positions with probability
+                    #    `mlm_prob` and replace these positions in the batch by the ouput of cmp(batch). The remainder is
+                    #    kept the same as the input and the batch is place back into the buffer.
+                    #
+                    #    At mlm_prob=1.0, this results in a fully new random sequence sampled. The idea of lower values is
+                    #    that this results in more internal correlation in the samples. That is, the value of one token can
+                    #    be inferred from other parts of the sequence more easily.
+
+                    output = cmp_source(z)
+                    chars, mask = output[:, :, :-1], output[:, :, -1]
+
+                    chars = sample(chars, temperature=temperature)
+                    # mask out random columns for the model to replace
+
+                    mask = torch.sigmoid(mask).round()
+                    mask = mask.to(torch.bool)
+
+                    z[mask] = chars[mask]
+
+                    buffer[i, :] = z
+
+                # -- The output of sample_sequence is context + 1 because of the seed, so we slice off the last character. The
+                #    seed is likely more important in the long run
+
+
+
+def run_sample(emb=768, heads=8, cdepth=3, context=128, temperature=0.5, sample_batch_size=100,
          buffer_size=2000,
          reset_prob=0.01, num_batches=100_000, tags=[],
          debug=False, warmup=100_000, eval_every=5_000, print_every=500, gc=1.0,
          sequential=False, eval_samples=10_000, steps_per_sample=1, mlm_prob=0.15, ascii_only=False,
-         init_mult=1.0
+         init_mult_max=1.0
        ):
     """
     Generates a dataset by sampling sequences autoregressively from a given model.
@@ -356,7 +430,7 @@ def run_sample(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.
 
         with torch.no_grad():
             # Re-initialize the parameters of source (i.e. sample a random source)
-            weights_init(cmp_source, init_mult=init_mult)
+            weights_init(cmp_source, init_mult_max=init_mult_max)
 
             # slice a random selection of rows from the buffer (without replacement)
             iz = random.sample(range(buffer_size), sample_batch_size)
@@ -590,7 +664,7 @@ def toy(name='dyck', emb=768, heads=8, depth=12, context=128, temperature=0.5, b
         bar.set_postfix({'loss': f'{loss:.02}'})
 
 def test():
-
+    pass
     # data = enwik8_bytes()
     # data = data[0] + data[1] + data[2]
     #

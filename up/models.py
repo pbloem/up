@@ -304,7 +304,18 @@ class GTransformer(nn.Module):
     Transformer for generating text (character by character).
     """
 
-    def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu):
+    def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False):
+        """
+
+        :param emb:
+        :param heads:
+        :param depth:
+        :param seq_length:
+        :param num_tokens:
+        :param nl:
+        :param mask_channel: Add an extra output channel (used for masking)
+        """
+
         super().__init__()
 
         self.num_tokens = num_tokens
@@ -312,7 +323,7 @@ class GTransformer(nn.Module):
         self.token_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=num_tokens)
         self.pos_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=seq_length)
 
-        self.toprobs = nn.Linear(emb, num_tokens)
+        self.toprobs = nn.Linear(emb, num_tokens + 1) if mask_channel else nn.Linear(emb, num_tokens)
 
         tblocks = []
         for _ in range(depth):

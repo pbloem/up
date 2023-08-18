@@ -91,7 +91,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     cmp_source = \
         up.ConditionalTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS) \
         if sequential else \
-        up.GTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nonlinearity))
+        up.GTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nonlinearity), mask_channel=True)
 
     # Target for training
     model  = up.GTransformer(emb=emb, heads=heads, depth=mdepth, seq_length=context, num_tokens=NUM_TOKENS)
@@ -189,13 +189,12 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     with torch.cuda.amp.autocast():
                         output = cmp_source(z)
 
-                    output = sample(output, temperature=temperature)
+                    chars, mask = output[:, :, :-1], output[:, :, -1]
 
-                    # mask out random columns for the model to replace
-                    rows = torch.bernoulli(torch.full(size=(1, context), fill_value=mlm_prob))
-                    mask = rows.expand(sample_batch_size, context).to(torch.bool)
+                    chars = sample(chars, temperature=temperature)
+                    mask = torch.sigmoid(mask).to(torch.bool)
 
-                    z[mask] = output[mask]
+                    z[mask] = chars[mask]
 
                     buffer[iz, :] = z
 
