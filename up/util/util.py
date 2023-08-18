@@ -301,7 +301,7 @@ def sample(lnprobs, temperature=1.0):
         return lnprobs.argmax(dim=-1)
 
     p = F.softmax(lnprobs / temperature, dim=-1)
-    cd = dist.Categorical(p)
+    cd = dist.Categorical(p, validate_args=False)
 
     return cd.sample()
 
