@@ -218,6 +218,10 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     loss = F.cross_entropy(output.transpose(2, 1), target)
 
                 scaler.scale(loss).backward()
+
+                if gc > 0.0:
+                    nn.utils.clip_grad_norm_(model.parameters(), gc)
+
                 scaler.step(opt)
                 scaler.update()
 
@@ -293,6 +297,10 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
             loss = F.cross_entropy(output.transpose(2, 1), target)
 
         scaler.scale(loss).backward()
+
+        if gc > 0.0:
+            nn.utils.clip_grad_norm_(model.parameters(), gc)
+
         scaler.step(opt)
         scaler.update()
 
