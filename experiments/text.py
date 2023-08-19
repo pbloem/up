@@ -341,7 +341,7 @@ def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
     if torch.cuda.is_available():
         cmp_source.cuda()
 
-    buffer = torch.randint(low=0, high=num_tokens(ascii_only), size=(buffer_size, context), device=d())
+    buffer = torch.randint(low=0, high=num_tokens(ascii_only), size=(buffer_size, context), device='cpu')
 
     for n in range(max_depth):
 
@@ -372,6 +372,9 @@ def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
 
                 z = buffer[fr:to]
 
+                if torch.cuda.is_available():
+                    z = z.cuda()
+
                 # pass it through a randomly chosen model
                 if sequential:
                     # -- In sequential mode we autoregressively sample, with z as a conditional input
@@ -383,16 +386,12 @@ def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
                                          temperature=temperature,
                                          conditional=z)
 
-                    buffer[fr:to, :] = batch[:, :]
+                    buffer[fr:to, :] = batch.cpu()
 
                 else:
-                    # -- In non-sequential mode, we follow the MLM strategy. We sample output positions with probability
-                    #    `mlm_prob` and replace these positions in the batch by the ouput of cmp(batch). The remainder is
-                    #    kept the same as the input and the batch is place back into the buffer.
-                    #
-                    #    At mlm_prob=1.0, this results in a fully new random sequence sampled. The idea of lower values is
-                    #    that this results in more internal correlation in the samples. That is, the value of one token can
-                    #    be inferred from other parts of the sequence more easily.
+                    # -- In non-sequential mode, we apply a mask. The modle produces this mask with a sigmoided output
+                    #    channel. For the masked out position, we use the characters from the input, and for the rest we
+                    #    use the model output.
 
                     output = cmp_source(z)
                     chars, mask = output[:, :, :-1], output[:, :, -1]
@@ -403,12 +402,10 @@ def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
                     mask = torch.sigmoid(mask).round()
                     mask = mask.to(torch.bool)
 
-                    z[mask] = chars[mask]
+                    batch[mask] = chars[mask]
 
-                    buffer[fr:to, :] = z
+                    buffer[fr:to, :] = batch.cpu()
 
-                # -- The output of sample_sequence is context + 1 because of the seed, so we slice off the last character. The
-                #    seed is likely more important in the long run
 
 
 
