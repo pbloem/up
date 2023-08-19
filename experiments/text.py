@@ -310,24 +310,27 @@ def print_batch(batch, ascii_only):
         print()
     print()
 
-
 def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
          buffer_size=20,
-         reset_prob=0.01, max_depth=30, tags=[],
-         debug=False, warmup=100_000, eval_every=5_000, print_every=500, gc=1.0,
+         reset_prob=0.01, max_depth=30, tags=[], batch_size=1,
+         warmup=100_000, eval_every=5_000, print_every=500, gc=1.0,
          sequential=False, eval_samples=10_000, steps_per_sample=1, mlm_prob=0.15, ascii_only=False,
-         init_mult_max=1.0, mask_prob_max=1.0
+         init_mult_max=1.0, mask_prob_max=1.0, file_prefix=None, shuffle=True
        ):
     """
-    Samples from the "universal" distribution at every n.
-    """
+    Samples from the "universal" distribution at every n. Saves to a gzipped byte file.
 
-    wd = wandb.init(
-        project='prior',
-        tags=tags,
-        config=locals(),
-        mode= 'disabled' if debug else 'online'
-    )
+
+    The file can be read with:
+    ```
+    with gzip.open(filename, 'r') as file:
+      lines = file.read()
+      lines = torch.tensor([int(byte) for byte in lines], dtype=torch.long)
+      lines = lines.reshape(-1, context)
+    ```
+    Note that the context length is not stored in the file.
+
+    """
 
     # Computation source
     cmp_source = \
@@ -343,17 +346,31 @@ def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
     for n in range(max_depth):
 
         print(n)
-        print_batch(buffer, ascii_only)
+        print_batch(buffer[:4], ascii_only)
         print()
 
-        for i in trange(buffer_size):
+        with gzip.open(f'{file_prefix}.{n:04}.gz', 'w') as file:
+            for seq in buffer:
+                seq = bytes(seq.tolist())
+                file.write(seq)
+
+        # Shuffle the buffer
+        if shuffle:
+            idx = torch.randperm(buffer.shape[0])
+            buffer = buffer[idx]
+
+
+
+        for fr in trange(0, buffer_size, batch_size):
+
+            to = fr + batch_size
 
             with torch.no_grad():
 
                 # Re-initialize the parameters of source (i.e. sample a random source)
                 weights_init(cmp_source, init_mult_max=init_mult_max, mask_prob_max=mask_prob_max)
 
-                z = buffer[i:i+1]
+                z = buffer[fr:to]
 
                 # pass it through a randomly chosen model
                 if sequential:
@@ -361,12 +378,12 @@ def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
                     #    This is very slow, but the computational patterns we expect to see are closer to those of the model
                     #    we are training (which is always autoregressive).
 
-                    seed = torch.randint(low=0, high=num_tokens(ascii_only), size=(sample_batch_size, 1), device=d())
-                    batch = sample_sequence(cmp_source, seed, context, num_tokens=num_tokens(ascii_only), length=context,
+                    seed = torch.randint(low=0, high=num_tokens(ascii_only), size=(batch_size, 1), device=d())
+                    batch = sample_sequence(cmp_source, seed, context, num_tokens=num_tokens(ascii_only), length=context - 1,
                                          temperature=temperature,
                                          conditional=z)
 
-                    buffer[i, :] = batch[:, :-1]
+                    buffer[fr:to, :] = batch[:, :]
 
                 else:
                     # -- In non-sequential mode, we follow the MLM strategy. We sample output positions with probability
@@ -388,7 +405,7 @@ def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
 
                     z[mask] = chars[mask]
 
-                    buffer[i, :] = z
+                    buffer[fr:to, :] = z
 
                 # -- The output of sample_sequence is context + 1 because of the seed, so we slice off the last character. The
                 #    seed is likely more important in the long run
