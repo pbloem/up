@@ -402,9 +402,9 @@ def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
                     mask = torch.sigmoid(mask).round()
                     mask = mask.to(torch.bool)
 
-                    batch[mask] = chars[mask]
+                    z[mask] = chars[mask]
 
-                    buffer[fr:to, :] = batch.cpu()
+                    buffer[fr:to, :] = z.cpu()
 
 
 
