@@ -67,7 +67,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
     wd = wandb.init(
         name=name,
-        project='prior',
+        project='prior2',
         tags=tags,
         config=locals(),
         mode= 'disabled' if debug else 'online'
@@ -111,9 +111,9 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         print('Starting throughput test.'); tic()
         model_batch_size, batch_sizes, throughputs = up.util.find_batch_size(model=model, loss=dummy_loss,
                                                                              input=dummy_input, burn_in=3, samples=20,
-                                                                             wandb=wandb, use_amp=True)
+                                                                             wandb=None, use_amp=True)
 
-        print(f'Finished ({toc():.4}s). Optimal batch size: {model_batch_size}. Batch sizes tested {batch_sizes}, with throughput {throughputs}.')
+        print(f'Finished ({toc():.4}s). Best batch size found: {model_batch_size}. Batch sizes and throughputs: {zip(batch_sizes, throughputs)}.')
 
     opt = torch.optim.Adam(lr=lr, params=model.parameters())
     if warmup > 0:
@@ -170,8 +170,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     #    we are training (which is always autoregressive).
 
                     seed = torch.randint(low=0, high=NUM_TOKENS, size=(sample_batch_size, 1), device=d())
-                    with torch.cuda.amp.autocast():
-                        batch = sample_sequence(cmp_source, seed, context, num_tokens=NUM_TOKENS, length=context,
+                    batch = sample_sequence(cmp_source, seed, context, num_tokens=NUM_TOKENS, length=context,
                                          temperature=temperature,
                                          conditional=z)
 
@@ -186,8 +185,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     #    that this results in more internal correlation in the samples. That is, the value of one token can
                     #    be inferred from other parts of the sequence more easily.
 
-                    with torch.cuda.amp.autocast():
-                        output = cmp_source(z)
+                    output = cmp_source(z)
 
                     chars, mask = output[:, :, :-1], output[:, :, -1]
 
@@ -200,6 +198,9 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
                 # -- The output of sample_sequence is context + 1 because of the seed, so we slice off the last character. The
                 #    seed is likely more important in the long run
+
+                # -- Note that the samples are in full precision. These often require large weights, so mixed precision
+                #    leads to nans and infs and whatnot.
 
             sampletime = toc()
 
