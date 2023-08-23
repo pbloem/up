@@ -6,7 +6,7 @@ from up.data import load_data, cas
 from former.util import d, here, tic, toc, sample_batch, enwik8_string, enwik8_bytes, estimate_compression
 import former
 
-import wandb, random, fire
+import wandb, random, fire, gzip
 
 import torch
 from torch import nn
@@ -55,7 +55,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          debug=False, warmup=100_000, eval_every=5_000, print_every=500, gc=1.0,
          sequential=False, eval_samples=10_000, steps_per_sample=1, mlm_prob=0.15, ascii_only=False,
          init_mult_max=5.0, mask_prob_max=0.7, nonlinearity='relu', skip_eval=False, eval_ood=False,
-         name=None, eval_batch_mult=2.0
+         name=None, eval_batch_mult=2.0, pre_file=None
        ):
 
     """
@@ -88,16 +88,28 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     scaler = torch.cuda.amp.GradScaler()
 
     # Computation source
-    cmp_source = \
-        up.ConditionalTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS) \
-        if sequential else \
-        up.GTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nonlinearity), mask_channel=True)
+    if pre_file is None:
+        cmp_source = \
+            up.ConditionalTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS) \
+            if sequential else \
+            up.GTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nonlinearity), mask_channel=True)
+
+        if torch.cuda.is_available():
+            cmp_source.cuda()
+
+        buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device=d())
+
+    else:
+        with gzip.open(pre_file, 'r') as file:
+            buffer = file.read()
+            buffer = torch.tensor([int(byte) for byte in buffer], dtype=torch.long)
+            buffer = buffer.reshape(-1, context)
+
+            buffer_size = buffer.size(0)
 
     # Target for training
     model  = up.GTransformer(emb=emb, heads=heads, depth=mdepth, seq_length=context, num_tokens=NUM_TOKENS)
-
     if torch.cuda.is_available():
-        cmp_source.cuda()
         model.cuda()
 
     # Throughput test to find batch size
@@ -118,8 +130,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     opt = torch.optim.Adam(lr=lr, params=model.parameters())
     if warmup > 0:
         sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
-
-    buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device=d())
 
     # Pretraining batches
     if pre_batches > 0:
@@ -145,70 +155,75 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
                     wandb.log({f'val-{name}': est})
 
-            opt.zero_grad()
+            if pre_file is None: # sample on the fly
 
-            tic()
-            with torch.no_grad():
-                # Re-initialize the parameters of source (i.e. sample a random source)
-                up.weights_init(cmp_source, init_mult_max=init_mult_max, mask_prob_max=mask_prob_max)
+                opt.zero_grad()
 
-                # slice a random selection of rows from the buffer (without replacement)
-                iz = random.sample(range(buffer_size), sample_batch_size)
-                z = buffer[iz, :]
+                tic()
+                with torch.no_grad():
+                    # Re-initialize the parameters of source (i.e. sample a random source)
+                    up.weights_init(cmp_source, init_mult_max=init_mult_max, mask_prob_max=mask_prob_max)
 
-                # replace some random rows with uniform random characters
-                rows = torch.bernoulli(torch.full(size=(sample_batch_size, 1), fill_value=reset_prob))
-                mask = rows.expand(sample_batch_size, context).to(torch.bool)
+                    # slice a random selection of rows from the buffer (without replacement)
+                    iz = random.sample(range(buffer.size(0)), sample_batch_size)
+                    z = buffer[iz, :]
 
-                uniform = torch.randint(low=0, high=NUM_TOKENS, size=(sample_batch_size, context), device=d())
-                z[mask] = uniform[mask]
+                    # replace some random rows with uniform random characters
+                    rows = torch.bernoulli(torch.full(size=(sample_batch_size, 1), fill_value=reset_prob))
+                    mask = rows.expand(sample_batch_size, context).to(torch.bool)
 
-                # pass it through a randomly chosen model
-                if sequential:
-                    # -- In sequential mode we autoregressively sample, with z as a conditional input
-                    #    This is very slow, but the computational patterns we expect to see are closer to those of the model
-                    #    we are training (which is always autoregressive).
+                    uniform = torch.randint(low=0, high=NUM_TOKENS, size=(sample_batch_size, context), device=d())
+                    z[mask] = uniform[mask]
 
-                    seed = torch.randint(low=0, high=NUM_TOKENS, size=(sample_batch_size, 1), device=d())
-                    batch = sample_sequence(cmp_source, seed, context, num_tokens=NUM_TOKENS, length=context,
-                                         temperature=temperature,
-                                         conditional=z)
+                    # pass it through a randomly chosen model
+                    if sequential:
+                        # -- In sequential mode we autoregressively sample, with z as a conditional input
+                        #    This is very slow, but the computational patterns we expect to see are closer to those of the model
+                        #    we are training (which is always autoregressive).
 
-                    buffer[iz, :] = batch[:, :-1]
+                        seed = torch.randint(low=0, high=NUM_TOKENS, size=(sample_batch_size, 1), device=d())
+                        batch = sample_sequence(cmp_source, seed, context, num_tokens=NUM_TOKENS, length=context,
+                                             temperature=temperature,
+                                             conditional=z)
 
-                else:
-                    # -- In non-sequential mode, we follow the MLM strategy. We sample output positions with probability
-                    #    `mlm_prob` and replace these positions in the batch by the ouput of cmp(batch). The remainder is
-                    #    kept the same as the input and the batch is place back into the buffer.
-                    #
-                    #    At mlm_prob=1.0, this results in a fully new random sequence sampled. The idea of lower values is
-                    #    that this results in more internal correlation in the samples. That is, the value of one token can
-                    #    be inferred from other parts of the sequence more easily.
+                        buffer[iz, :] = batch[:, :-1]
 
-                    output = cmp_source(z)
+                    else:
+                        # -- In non-sequential mode, we follow the MLM strategy. We sample output positions with probability
+                        #    `mlm_prob` and replace these positions in the batch by the ouput of cmp(batch). The remainder is
+                        #    kept the same as the input and the batch is place back into the buffer.
+                        #
+                        #    At mlm_prob=1.0, this results in a fully new random sequence sampled. The idea of lower values is
+                        #    that this results in more internal correlation in the samples. That is, the value of one token can
+                        #    be inferred from other parts of the sequence more easily.
 
-                    chars, mask = output[:, :, :-1], output[:, :, -1]
+                        output = cmp_source(z)
 
-                    chars = sample(chars, temperature=temperature)
-                    mask = torch.sigmoid(mask).to(torch.bool)
+                        chars, mask = output[:, :, :-1], output[:, :, -1]
 
-                    z[mask] = chars[mask]
+                        chars = sample(chars, temperature=temperature)
+                        mask = torch.sigmoid(mask).to(torch.bool)
 
-                    buffer[iz, :] = z
+                        z[mask] = chars[mask]
 
-                # -- The output of sample_sequence is context + 1 because of the seed, so we slice off the last character. The
-                #    seed is likely more important in the long run
+                        buffer[iz, :] = z
 
-                # -- Note that the samples are in full precision. These often require large weights, so mixed precision
-                #    leads to nans and infs and whatnot.
+                    # -- The output of sample_sequence is context + 1 because of the seed, so we slice off the last character. The
+                    #    seed is likely more important in the long run
 
-            sampletime = toc()
+                    # -- Note that the samples are in full precision. These often require large weights, so mixed precision
+                    #    leads to nans and infs and whatnot.
+
+                sampletime = toc()
 
             tic()
             # Perform n training steps on batches samples from the buffer
             for _ in range(steps_per_sample):
                 iz = random.sample(range(buffer_size), model_batch_size)
+
                 batch = buffer[iz, :]
+                if torch.cuda.is_available():
+                    batch = batch.cuda()
 
                 input  = batch[:, :-1]
                 target = batch[:, 1:]
