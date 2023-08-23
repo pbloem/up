@@ -367,6 +367,8 @@ class Search():
         self.x = [k for k, _ in self.samples.items()]
         self.y = [v for _, v in self.samples.items()]
 
+        self.x, self.y = tuple( list(x) for x in zip(*sorted(zip(self.x, self.y), key=lambda p: p[0] )) )
+
         self.opt, opty = -1, float('-inf')
         for x, y in self.samples.items():
             if y > opty:

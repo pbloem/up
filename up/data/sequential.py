@@ -209,7 +209,7 @@ def cas(i):
     :return:
     """
     assert i >= 0 and i < 256
-    return str(chr(128)) if (i < 32) else str(chr(i))
+    return str(chr(128)) if (i < 33) else str(chr(i))
 
 def load_str(name='dyck', num_chars=100_000, final=False):
     res = load_data(name, num_chars, final)

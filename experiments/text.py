@@ -310,6 +310,17 @@ def print_batch(batch, ascii_only):
         print()
     print()
 
+
+def load(file, context=128, ascii_only=False):
+
+    with gzip.open(file, 'r') as file:
+        lines = file.read()
+        lines = torch.tensor([int(byte) for byte in lines], dtype=torch.long)
+        lines = lines.reshape(-1, context)
+
+    print_batch(lines[:20], ascii_only)
+    print()
+
 def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
          buffer_size=20,
          reset_prob=0.01, max_depth=30, tags=[], batch_size=1,
@@ -349,10 +360,11 @@ def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
         print_batch(buffer[:4], ascii_only)
         print()
 
-        with gzip.open(f'{file_prefix}.{n:04}.gz', 'w') as file:
-            for seq in buffer:
-                seq = bytes(seq.tolist())
-                file.write(seq)
+        if file_prefix is not None:
+            with gzip.open(f'{file_prefix}.{n:04}.gz', 'w') as file:
+                for seq in buffer:
+                    seq = bytes(seq.tolist())
+                    file.write(seq)
 
         # Shuffle the buffer
         if shuffle:
@@ -368,7 +380,7 @@ def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
             with torch.no_grad():
 
                 # Re-initialize the parameters of source (i.e. sample a random source)
-                weights_init(cmp_source, init_mult_max=init_mult_max, mask_prob_max=mask_prob_max)
+                up.weights_init(cmp_source, init_mult_max=init_mult_max, mask_prob_max=mask_prob_max)
 
                 z = buffer[fr:to]
 
@@ -414,12 +426,16 @@ def run_sample(emb=768, heads=8, cdepth=3, context=128, temperature=0.5, sample_
          reset_prob=0.01, num_batches=100_000, tags=[],
          debug=False, warmup=100_000, eval_every=5_000, print_every=500, gc=1.0,
          sequential=False, eval_samples=10_000, steps_per_sample=1, mlm_prob=0.15, ascii_only=False,
-         init_mult_max=1.0
+         init_mult_max=1.0, mask_prob_max=0.7
        ):
     """
-    Generates a dataset by sampling sequences autoregressively from a given model.
+    Samples a dataset from the _mixed_ generator. This works by maintaining a buffer of sequences, from which it samples
+    a random subset as a batch to pass through a random model. The outputs of the sample replace the original sequences
+    in the buffer. With a certain small probability, each instance in the batch is reset to a random string.
 
-    Separates model and source. Samples over all depths of universal model.
+    From each batch, we then sample one sequence and return it as a result of the sampling. This ensure that every
+    instance in our sample data comes, most recently, from a unique model.
+
     """
 
     wd = wandb.init(
@@ -433,7 +449,7 @@ def run_sample(emb=768, heads=8, cdepth=3, context=128, temperature=0.5, sample_
     cmp_source = \
         ConditionalTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=num_tokens(ascii_only)) \
         if sequential else \
-        GTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=num_tokens(ascii_only))
+        GTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=num_tokens(ascii_only), mask_channel=True)
 
     if torch.cuda.is_available():
         cmp_source.cuda()
@@ -444,7 +460,7 @@ def run_sample(emb=768, heads=8, cdepth=3, context=128, temperature=0.5, sample_
 
         with torch.no_grad():
             # Re-initialize the parameters of source (i.e. sample a random source)
-            weights_init(cmp_source, init_mult_max=init_mult_max)
+            up.weights_init(cmp_source, init_mult_max=init_mult_max, mask_prob_max=mask_prob_max)
 
             # slice a random selection of rows from the buffer (without replacement)
             iz = random.sample(range(buffer_size), sample_batch_size)
@@ -480,15 +496,17 @@ def run_sample(emb=768, heads=8, cdepth=3, context=128, temperature=0.5, sample_
                 #    be inferred from other parts of the sequence more easily.
 
                 output = cmp_source(z)
-                output = sample(output, temperature=temperature)
+                chars, mask = output[:, :, :-1], output[:, :, -1]
 
+                chars = sample(chars, temperature=temperature)
                 # mask out random columns for the model to replace
-                rows = torch.bernoulli(torch.full(size=(1, context), fill_value=mlm_prob))
-                mask = rows.expand(sample_batch_size, context).to(torch.bool)
 
-                z[mask] = output[mask]
+                mask = torch.sigmoid(mask).round()
+                mask = mask.to(torch.bool)
 
-                buffer[iz, :] = z
+                z[mask] = chars[mask]
+
+                buffer[iz, :] = z.cpu()
 
             # -- The output of sample_sequence is context + 1 because of the seed, so we slice off the last character. The
             #    seed is likely more important in the long run
