@@ -318,7 +318,9 @@ def load(file, context=128, ascii_only=False):
         lines = torch.tensor([int(byte) for byte in lines], dtype=torch.long)
         lines = lines.reshape(-1, context)
 
-    print_batch(lines[:20], ascii_only)
+    for i in range(20):
+        print()
+        print_batch(lines[i:i+1], ascii_only)
     print()
 
 def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
