@@ -33,6 +33,14 @@ def print_batch(batch, ascii_only):
         print()
     print()
 
+    # print('---')
+    # for seq in batch:
+    #     seq = bytes(list(seq)).decode('utf-8')
+    #     print(seq)
+    #     print()
+    # print('---')
+
+
 def nl(name : str):
     if name == 'relu':
         return torch.relu
@@ -130,6 +138,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     opt = torch.optim.Adam(lr=lr, params=model.parameters())
     if warmup > 0:
         sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
+
+    sampletime = -1.0
 
     # Pretraining batches
     if pre_batches > 0:
