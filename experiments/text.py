@@ -512,12 +512,12 @@ def run_sample(emb=768, heads=8, cdepth=3, context=128, temperature=0.5, sample_
 
 
                 iz = random.sample(range(buffer_size), sample_batch_size)
-                sample = buffer[iz, :]
+                sampl = buffer[iz, :]
 
                 # print_batch(buffer[:4], ascii_only)
                 # print()
 
-                for seq in sample:
+                for seq in sampl:
                     seq = bytes(seq.tolist())
                     file.write(seq)
 
