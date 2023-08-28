@@ -466,7 +466,7 @@ def run_sample(emb=768, heads=8, cdepth=3, context=128, temperature=0.5, sample_
                     z = buffer[iz, :]
 
                     # replace some random rows with uniform random characters
-                    rows = torch.bernoulli(torch.full(size=(sample_batch_size, 1), fill_value=reset_prob))
+                    rows = torch.bernoulli(torch.full(size=(sample_batch_size, 1), fill_value=reset_prob, device=d()))
                     mask = rows.expand(sample_batch_size, context).to(torch.bool)
 
                     uniform = torch.randint(low=0, high=num_tokens(ascii_only), size=(sample_batch_size, context), device=d())
@@ -505,19 +505,19 @@ def run_sample(emb=768, heads=8, cdepth=3, context=128, temperature=0.5, sample_
 
                         z[mask] = chars[mask]
 
-                        buffer[iz, :] = z.cpu()
+                        buffer[iz, :] = z
 
                     # -- The output of sample_sequence is context + 1 because of the seed, so we slice off the last character. The
                     #    seed is likely more important in the long run
 
 
                 iz = random.sample(range(buffer_size), sample_batch_size)
-                z = buffer[iz, :]
+                sample = buffer[iz, :]
 
                 # print_batch(buffer[:4], ascii_only)
                 # print()
 
-                for seq in z:
+                for seq in sample:
                     seq = bytes(seq.tolist())
                     file.write(seq)
 
