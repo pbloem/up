@@ -425,10 +425,12 @@ def run_every(emb=768, heads=8, cdepth=3, context=128, temperature=0.5,
 
 def run_sample(emb=768, heads=8, cdepth=3, context=128, temperature=0.5, sample_batch_size=100,
          buffer_size=2000,
-         reset_prob=0.01, num_batches=100_000, tags=[],
-         debug=False, warmup=100_000, eval_every=5_000, print_every=500, gc=1.0,
-         sequential=False, eval_samples=10_000, steps_per_sample=1, mlm_prob=0.15, ascii_only=False,
-         init_mult_max=1.0, mask_prob_max=0.7
+         reset_prob=0.01, num_batches=100_000,
+         sequential=False,
+         ascii_only=False,
+         init_mult_max=1.0,
+         mask_prob_max=0.7,
+         file_prefix=None
        ):
     """
     Samples a dataset from the _mixed_ generator. This works by maintaining a buffer of sequences, from which it samples
@@ -437,15 +439,7 @@ def run_sample(emb=768, heads=8, cdepth=3, context=128, temperature=0.5, sample_
 
     From each batch, we then sample one sequence and return it as a result of the sampling. This ensure that every
     instance in our sample data comes, most recently, from a unique model.
-
     """
-
-    wd = wandb.init(
-        project='prior',
-        tags=tags,
-        config=locals(),
-        mode= 'disabled' if debug else 'online'
-    )
 
     # Computation source
     cmp_source = \
@@ -458,68 +452,74 @@ def run_sample(emb=768, heads=8, cdepth=3, context=128, temperature=0.5, sample_
 
     buffer = torch.randint(low=0, high=num_tokens(ascii_only), size=(buffer_size, context), device=d())
 
-    for i in (bar := trange(num_batches)):
+    if file_prefix is not None:
+        with gzip.open(f'{file_prefix}.mixed.gz', 'w') as file:
 
-        with torch.no_grad():
-            # Re-initialize the parameters of source (i.e. sample a random source)
-            up.weights_init(cmp_source, init_mult_max=init_mult_max, mask_prob_max=mask_prob_max)
+            for i in (bar := trange(num_batches)):
 
-            # slice a random selection of rows from the buffer (without replacement)
-            iz = random.sample(range(buffer_size), sample_batch_size)
-            z = buffer[iz, :]
+                with torch.no_grad():
+                    # Re-initialize the parameters of source (i.e. sample a random source)
+                    up.weights_init(cmp_source, init_mult_max=init_mult_max, mask_prob_max=mask_prob_max)
 
-            # replace some random rows with uniform random characters
-            rows = torch.bernoulli(torch.full(size=(sample_batch_size, 1), fill_value=reset_prob))
-            mask = rows.expand(sample_batch_size, context).to(torch.bool)
+                    # slice a random selection of rows from the buffer (without replacement)
+                    iz = random.sample(range(buffer_size), sample_batch_size)
+                    z = buffer[iz, :]
 
-            uniform = torch.randint(low=0, high=num_tokens(ascii_only), size=(sample_batch_size, context), device=d())
-            z[mask] = uniform[mask]
+                    # replace some random rows with uniform random characters
+                    rows = torch.bernoulli(torch.full(size=(sample_batch_size, 1), fill_value=reset_prob))
+                    mask = rows.expand(sample_batch_size, context).to(torch.bool)
 
-            # pass it through a randomly chosen model
-            if sequential:
-                # -- In sequential mode we autoregressively sample, with z as a conditional input
-                #    This is very slow, but the computational patterns we expect to see are closer to those of the model
-                #    we are training (which is always autoregressive).
+                    uniform = torch.randint(low=0, high=num_tokens(ascii_only), size=(sample_batch_size, context), device=d())
+                    z[mask] = uniform[mask]
 
-                seed = torch.randint(low=0, high=num_tokens(ascii_only), size=(sample_batch_size, 1), device=d())
-                batch = sample_sequence(cmp_source, seed, context, num_tokens=num_tokens(ascii_only), length=context,
-                                     temperature=temperature,
-                                     conditional=z)
+                    # pass it through a randomly chosen model
+                    if sequential:
+                        # -- In sequential mode we autoregressively sample, with z as a conditional input
+                        #    This is very slow, but the computational patterns we expect to see are closer to those of the model
+                        #    we are training (which is always autoregressive).
 
-                buffer[iz, :] = batch[:, :-1]
+                        seed = torch.randint(low=0, high=num_tokens(ascii_only), size=(sample_batch_size, 1), device=d())
+                        batch = sample_sequence(cmp_source, seed, context, num_tokens=num_tokens(ascii_only), length=context,
+                                             temperature=temperature,
+                                             conditional=z)
 
-            else:
-                # -- In non-sequential mode, we follow the MLM strategy. We sample output positions with probability
-                #    `mlm_prob` and replace these positions in the batch by the ouput of cmp(batch). The remainder is
-                #    kept the same as the input and the batch is place back into the buffer.
-                #
-                #    At mlm_prob=1.0, this results in a fully new random sequence sampled. The idea of lower values is
-                #    that this results in more internal correlation in the samples. That is, the value of one token can
-                #    be inferred from other parts of the sequence more easily.
+                        buffer[iz, :] = batch[:, :-1]
 
-                output = cmp_source(z)
-                chars, mask = output[:, :, :-1], output[:, :, -1]
+                    else:
+                        # -- In non-sequential mode, we follow the MLM strategy. We sample output positions with probability
+                        #    `mlm_prob` and replace these positions in the batch by the ouput of cmp(batch). The remainder is
+                        #    kept the same as the input and the batch is place back into the buffer.
+                        #
+                        #    At mlm_prob=1.0, this results in a fully new random sequence sampled. The idea of lower values is
+                        #    that this results in more internal correlation in the samples. That is, the value of one token can
+                        #    be inferred from other parts of the sequence more easily.
 
-                chars = sample(chars, temperature=temperature)
-                # mask out random columns for the model to replace
+                        output = cmp_source(z)
+                        chars, mask = output[:, :, :-1], output[:, :, -1]
 
-                mask = torch.sigmoid(mask).round()
-                mask = mask.to(torch.bool)
+                        chars = sample(chars, temperature=temperature)
+                        # mask out random columns for the model to replace
 
-                z[mask] = chars[mask]
+                        mask = torch.sigmoid(mask).round()
+                        mask = mask.to(torch.bool)
 
-                buffer[iz, :] = z.cpu()
+                        z[mask] = chars[mask]
 
-            # -- The output of sample_sequence is context + 1 because of the seed, so we slice off the last character. The
-            #    seed is likely more important in the long run
+                        buffer[iz, :] = z.cpu()
 
-        if i % print_every == 0:
+                    # -- The output of sample_sequence is context + 1 because of the seed, so we slice off the last character. The
+                    #    seed is likely more important in the long run
 
-            # iz = random.sample(range(buffer_size), 4)
-            # z = buffer[iz, :]
 
-            print_batch(buffer[:4, :], ascii_only)
-            print()
+                iz = random.sample(range(buffer_size), sample_batch_size)
+                z = buffer[iz, :]
+
+                # print_batch(buffer[:4], ascii_only)
+                # print()
+
+                for seq in z:
+                    seq = bytes(seq.tolist())
+                    file.write(seq)
 
 def nonseq(emb=768, heads=8, depth=12, context=128, temperature=0.5, batch_size=256, num_batches=100_000, lr=3e-4, tags=[],
            debug=False, warmup=100_000, pretrain_its=1, eval_every=5_000, gc=1.0):
