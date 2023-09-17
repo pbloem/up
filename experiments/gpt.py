@@ -61,9 +61,14 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          buffer_size=2000, pre_batches=0, model_batch_size=None,
          reset_prob=0.01, num_batches=10_000_000, lr=3e-4, tags=[],
          debug=False, warmup=100_000, eval_every=5_000, print_every=500, gc=1.0,
-         sequential=False, eval_samples=10_000, steps_per_sample=1, mlm_prob=0.15, ascii_only=False,
-         init_mult_max=5.0, mask_prob_max=0.7, nonlinearity='relu', skip_eval=False, eval_ood=False,
-         name=None, eval_batch_mult=2.0, pre_file=None
+         sequential=False, eval_samples=10_000, mlm_prob=0.15, ascii_only=False,
+         init_mult_max=5.0, mask_prob_max=0.7, nonlinearity='relu',
+         skip_eval=False,     # Whether to skip the evaluation
+         eval_ood=False,      # Whether to evaluate on OOD datasets
+         name=None,           # WandB name
+         eval_batch_mult=2.0, # How much bigger the eval batches can be than the training batches
+         pre_file=None,       # File containing pre-training data
+         accumulate = 1       # The number of batches to accumulate the gradient over before a gradient step occurs
        ):
 
     """
@@ -137,6 +142,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
     opt = torch.optim.Adam(lr=lr, params=model.parameters())
     if warmup > 0:
+        warmup = warmup / accumulate
         sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
 
     sampletime = -1.0
@@ -165,9 +171,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
                     wandb.log({f'val-{name}': est})
 
-            if pre_file is None: # sample on the fly
-
-                opt.zero_grad()
+            if pre_file is None: # Sample on the fly.
 
                 tic()
                 with torch.no_grad():
@@ -227,34 +231,34 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                 sampletime = toc()
 
             tic()
-            # Perform n training steps on batches samples from the buffer
-            for _ in range(steps_per_sample):
-                iz = random.sample(range(buffer_size), model_batch_size)
+            # Perform a training step on batches sampled from the buffer
 
-                batch = buffer[iz, :]
-                if torch.cuda.is_available():
-                    batch = batch.cuda()
+            iz = random.sample(range(buffer_size), model_batch_size)
 
-                input  = batch[:, :-1]
-                target = batch[:, 1:]
+            batch = buffer[iz, :]
+            if torch.cuda.is_available():
+                batch = batch.cuda()
 
-                with torch.cuda.amp.autocast():
-                    output = model(input)
-                    loss = F.cross_entropy(output.transpose(2, 1), target)
+            input  = batch[:, :-1]
+            target = batch[:, 1:]
 
-                scaler.scale(loss).backward()
+            with torch.cuda.amp.autocast():
+                output = model(input)
+                loss = F.cross_entropy(output.transpose(2, 1), target)
 
-                if gc > 0.0:
-                    nn.utils.clip_grad_norm_(model.parameters(), gc)
+            scaler.scale(loss).backward()
 
+            if gc > 0.0:
+                nn.utils.clip_grad_norm_(model.parameters(), gc)
+
+            if i % accumulate == 0: # perform a step
                 scaler.step(opt)
                 scaler.update()
 
+                opt.zero_grad()
+
                 if warmup > 0:
                     sch.step()
-
-                # loss.backward()
-                # opt.step()
 
             traintime = toc()
 
