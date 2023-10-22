@@ -105,6 +105,9 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     # Target for training
     model = up.GTransformer(emb=emb, heads=heads, depth=mdepth, seq_length=context, num_tokens=NUM_TOKENS)
 
+    if torch.cuda.is_available():
+        model.cuda()
+
     # Throughput test to find batch size
     if model_batch_size is None:
         dummy_input = torch.randint(low=0, high=NUM_TOKENS, size=(1, context), dtype=torch.long, device=d())
@@ -126,9 +129,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     if warmup > 0:
         warmup = warmup / accumulate
         sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
-
-    if torch.cuda.is_available():
-        model.cuda()
 
     # Load a pretrained model
     if model_file is not None:
