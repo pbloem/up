@@ -105,6 +105,23 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     # Target for training
     model = up.GTransformer(emb=emb, heads=heads, depth=mdepth, seq_length=context, num_tokens=NUM_TOKENS)
 
+    # Throughput test to find batch size
+    if model_batch_size is None:
+        dummy_input = torch.randint(low=0, high=NUM_TOKENS, size=(1, context), dtype=torch.long, device=d())
+
+        def dummy_loss(output):
+            b, c, e = output.size()
+            dummy_target = torch.randint(low=0, high=NUM_TOKENS, size=(b, c), dtype=torch.long, device=d())
+            return F.cross_entropy(output.transpose(1, 2), dummy_target)
+
+        print('Starting throughput test.');
+        tic()
+        model_batch_size, batch_sizes, throughputs = up.util.find_batch_size(model=model, loss=dummy_loss,
+                                                                             input=dummy_input, burn_in=3, samples=20,
+                                                                             wandb=None, use_amp=True)
+
+        print(f'Finished ({toc():.4}s). Best batch size found: {model_batch_size}. Batch sizes and throughputs: {zip(batch_sizes, throughputs)}.')
+
     opt = torch.optim.Adam(lr=lr, params=model.parameters())
     if warmup > 0:
         warmup = warmup / accumulate
@@ -141,21 +158,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                 buffer = buffer.reshape(-1, context)
 
                 buffer_size = buffer.size(0)
-
-        # Throughput test to find batch size
-        dummy_input  = torch.randint(low=0, high=NUM_TOKENS, size=(1, context), dtype=torch.long, device=d())
-        def dummy_loss(output):
-            b, c, e = output.size()
-            dummy_target = torch.randint(low=0, high=NUM_TOKENS, size=(b, c), dtype=torch.long, device=d())
-            return F.cross_entropy(output.transpose(1,2), dummy_target)
-
-        if model_batch_size is None:
-            print('Starting throughput test.'); tic()
-            model_batch_size, batch_sizes, throughputs = up.util.find_batch_size(model=model, loss=dummy_loss,
-                                                                                 input=dummy_input, burn_in=3, samples=20,
-                                                                                 wandb=None, use_amp=True)
-
-            print(f'Finished ({toc():.4}s). Best batch size found: {model_batch_size}. Batch sizes and throughputs: {zip(batch_sizes, throughputs)}.')
 
         sampletime = -1.0
 
