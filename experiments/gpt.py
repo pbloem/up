@@ -77,7 +77,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     Generates a dataset by sampling sequences autoregressively from a given model.
 
     Separates model and source. Samples over all depths of universal model.
-
     """
 
     wd = wandb.init(
@@ -283,7 +282,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     'sample_time': sampletime,
                     'train_time': traintime,
                     'pre-training': 1.0
-
                 })
                 bar.set_postfix({'loss': f'{loss:.02}'})
 
@@ -300,6 +298,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     print_batch(output, ascii_only)
 
         if save_pretrained:
+            print('Saving model.')
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': opt.state_dict(),
