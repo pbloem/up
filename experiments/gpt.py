@@ -302,7 +302,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
             torch.save({
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': opt.state_dict(),
-            }, model_dst
+            }, model_dst)
 
     # Fine-tuning
     print('Start finetuning')
