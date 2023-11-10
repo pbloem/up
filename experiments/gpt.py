@@ -70,7 +70,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          pre_file=None,           # File containing pre-training data
          accumulate = 1,          # The number of batches to accumulate the gradient over before a gradient step occurs
          model_file = None,            # Filename of a pretrained model/optimizer
-         model_dst = './pretrained.pt' # Where to save the pretrained model
+         model_dst = './pretrained-{}.pt', # Where to save the pretrained model Add in an {} for the number of instances
+         cp_every = 100_000       # Save a checkpoint for the model every n batches.
        ):
 
     """
@@ -166,6 +167,15 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
             print('Start pre-training')
 
             for i in (bar := trange(pre_batches)):
+
+                if cp_every > 0 and i > 0 and i % cp_every == 0:
+
+                    if model_dst is not None:
+                        print(f'Saving model at {i * model_batch_size}.')
+                        torch.save({
+                            'model_state_dict': model.state_dict(),
+                            'optimizer_state_dict': opt.state_dict(),
+                        }, model_dst.format(model_batch_size))
 
                 if eval_every > 0 and i % eval_every == 0 and not skip_eval:
 
@@ -296,13 +306,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     output = sample_sequence(model, seed, context, num_tokens = NUM_TOKENS, length=context,
                                                     temperature = temperature)
                     print_batch(output, ascii_only)
-
-        if model_dst is not None:
-            print('Saving model.')
-            torch.save({
-                'model_state_dict': model.state_dict(),
-                'optimizer_state_dict': opt.state_dict(),
-            }, model_dst)
 
     # Fine-tuning
     print('Start finetuning')
