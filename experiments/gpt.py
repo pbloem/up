@@ -71,7 +71,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          accumulate = 1,          # The number of batches to accumulate the gradient over before a gradient step occurs
          model_file = None,            # Filename of a pretrained model/optimizer
          model_dst = './pretrained-{}.pt', # Where to save the pretrained model Add in an {} for the number of instances
-         cp_every = 100_000       # Save a checkpoint for the model every n batches.
+         cp_every = 100_000,       # Save a checkpoint for the model every n batches.
+         dp = False                # Use data-parallel
        ):
 
     """
@@ -107,6 +108,9 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
     if torch.cuda.is_available():
         model.cuda()
+
+    if dp:
+        model = torch.nn.DataParallel(model)
 
     # Throughput test to find batch size
     if model_batch_size is None:
@@ -148,6 +152,9 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
             if torch.cuda.is_available():
                 cmp_source.cuda()
+
+            if dp:
+                cmp_source = torch.nn.DataParallel(cmp_source)
 
             buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device=d())
 
