@@ -175,7 +175,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                         torch.save({
                             'model_state_dict': model.state_dict(),
                             'optimizer_state_dict': opt.state_dict(),
-                        }, model_dst.format(model_batch_size))
+                        }, model_dst.format(i * model_batch_size))
 
                 if eval_every > 0 and i % eval_every == 0 and not skip_eval:
 
