@@ -174,6 +174,16 @@ def load_toy(n=50_000, char=True, seed=0, name='lang'):
 
     return sequences, (i2t, t2i)
 
+def gen_bits(wordlength=5):
+    w1 = [random.choice([True, False]) for _ in range(wordlength)]
+    w2 = [random.choice([True, False]) for _ in range(wordlength)]
+
+    wxor = [b1 != b2 for b1, b2 in zip(w1, w2)]
+    wand = [b1 and b2 for b1, b2 in zip(w1, w2)]
+    wor  = [b1 or b2 for b1, b2 in zip(w1, w2)]
+    weq  = [b1 == b2 for b1, b2 in zip(w1, w2)]
+
+    return ['0' if b else '1' for b in w1+w2+wxor+wand+wor+weq]
 
 def to_bytes(s:str):
     """
@@ -227,7 +237,8 @@ def load_data(name='dyck', num_chars=100_000, final=False):
     gen = {
         'dyck' : gen_dyck,
         'ndfa' : gen_ndfa,
-        'toy'  : gen_sentence
+        'toy'  : gen_sentence,
+        'bits' : gen_bits
     }
 
     if name in gen.keys():
