@@ -183,7 +183,7 @@ def gen_bits(wordlength=5):
     wor  = [b1 or b2 for b1, b2 in zip(w1, w2)]
     weq  = [b1 == b2 for b1, b2 in zip(w1, w2)]
 
-    return ['0' if b else '1' for b in w1+w2+wxor+wand+wor+weq]
+    return ''.join('0' if b else '1' for b in (w1 + w2 + wxor + wand + wor + weq))
 
 def to_bytes(s:str):
     """
