@@ -25,7 +25,7 @@ TOY = {
 The test set performance (in bits-per-byte) of a n-th order Markov model with 0.01 Laplace smoothing. See experiments/markov
 for the code that was used to compute these.
 
-MARKOV[name][n] represents the n-th order markov model for dataset `name`. For the generated datasets separate datasets 
+MARKOV[name][n] represents the n-th order markov model for dataset `name`. For the generated datasets, separate datasets 
 were generated for train, test and val, and for wikipedia, the canonical splits were used.   
 """
 MARKOV = {
@@ -225,7 +225,7 @@ def load_str(name='dyck', num_chars=100_000, final=False):
     res = load_data(name, num_chars, final)
     return to_str(res)
 
-def load_data(name='dyck', num_chars=100_000, final=False):
+def load_data(name='dyck', num_chars=100_000, final=False, char_offset=0):
     """
     Load a dataset as a single contiguous string.
 
@@ -247,20 +247,20 @@ def load_data(name='dyck', num_chars=100_000, final=False):
             res += gen[name]()
             res += '|'
 
-        return to_bytes(res)
+        return [c + char_offset for c in to_bytes(res)]
 
     if name == 'wp':
         if final:
-            return [int(c) for c in enwik8_bytes()[2]] # test data
+            return [int(c) + char_offset for c in enwik8_bytes()[2]] # test data
         else:
-            return [int(c) for c in enwik8_bytes()[1]] # validation data
+            return [int(c) + char_offset for c in enwik8_bytes()[1]] # validation data
 
     if name == 'wp-train':
-        return [int(c) for c in enwik8_bytes()[0]]
+        return [int(c) + char_offset for c in enwik8_bytes()[0]]
 
     if name == 'wp-val':
-        return [int(c) for c in enwik8_bytes()[1]]
+        return [int(c) + char_offset for c in enwik8_bytes()[1]]
 
     if name == 'wp-test':
-        return [int(c) for c in enwik8_bytes()[2]]
+        return [int(c) + char_offset for c in enwik8_bytes()[2]]
 
