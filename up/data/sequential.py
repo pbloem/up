@@ -185,6 +185,28 @@ def gen_bits(wordlength=5):
 
     return ''.join('0' if b else '1' for b in (w1 + w2 + wxor + wand + wor + weq))
 
+def gen_champ(length=256, mx=16777216):
+    """
+    Generator inspired by the Champernowne constant 0.123456789101112...
+
+    We simply concatenate all integers from 0 to n into a sequence.
+
+    The result is a sequence in which each digit and n-gram appears with equal relative frequency (in the limit)
+    but which is also entirely predictable. This means that n-gram models should not do better than uniform
+    chance, but a model with more computional power should easily compress the whole sequence far below that.
+
+    :param mx:
+    :param length:
+    :return:
+    """
+    start = random.choice(range(0, mx-length))
+
+    seq = ''
+    for i in range(start, start+length):
+        seq += f'{i:x}'
+
+    return seq
+
 def to_bytes(s:str):
     """
     Converts a string to a series of integers between 0 and 256.
@@ -238,7 +260,8 @@ def load_data(name='dyck', num_chars=100_000, final=False, char_offset=0):
         'dyck' : gen_dyck,
         'ndfa' : gen_ndfa,
         'toy'  : gen_sentence,
-        'bits' : gen_bits
+        'bits' : gen_bits,
+        'champ': gen_champ,
     }
 
     if name in gen.keys():
