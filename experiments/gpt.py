@@ -91,11 +91,12 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
     if eval_ood:
         datasets = {
+            'champ': torch.tensor(load_data('champ'), dtype=torch.long),
             'dyck' : torch.tensor(load_data('dyck'), dtype=torch.long),
             'ndfa' : torch.tensor(load_data('ndfa'), dtype=torch.long),
             'toy'  : torch.tensor(load_data('toy'),  dtype=torch.long),
             'bits' : torch.tensor(load_data('bits'), dtype=torch.long),
-            'wp'   : torch.tensor(load_data('wp-val'), dtype=torch.long)
+            'wp'   : torch.tensor(load_data('wp-val'), dtype=torch.long),
         }
     else:
         datasets = {
