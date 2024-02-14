@@ -491,3 +491,43 @@ def weights_init(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0):
 
             # print(mod.weight.data[0])
             # print()
+
+def weights_init_plain(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0):
+    """
+    Re-initialize the weights of the given model.
+
+    This is mostly best-effort; it will work for the models we use in this project. It checks for certain types of pytorch
+    modules, and calls their reset_parameters() function.
+
+    :param model:
+    :param init_mult_max: Sets a multiplier applied to certain weights, not biases (after re-initialization). The multiplier
+        is a uniform value between 0 and `init_mult_max`
+    :param mask_prob_max: Sets the probability that any given element of a weight-tensor is masked out. That is, set to zero
+       after re-initialization. Not applied to biases. The probability is a uniform random values between 0 and
+        `mask_prob_max`.
+    :return:
+    """
+
+    for mod in model.modules():
+        if type(mod) is nn.Linear or type(mod) is nn.Embedding:
+
+            init_mult = init_mult_max
+            mask_prob = mask_prob_max
+
+            # print(type(mod))
+            # print(mod.weight.data[0])
+            mod.reset_parameters()
+
+            mod.weight.data *= init_mult
+
+            if mask_prob > 0.0:
+                mask = torch.bernoulli(torch.full_like(mod.weight.data, fill_value=mask_prob)).to(torch.bool)
+                mod.weight.data[mask] = 0.0
+
+
+def weights_init_minimal(model, init_mult):
+    for mod in model.modules():
+        if type(mod) is nn.Linear or type(mod) is nn.Embedding:
+
+            mod.reset_parameters()
+            mod.weight.data *= init_mult
