@@ -289,3 +289,66 @@ def load_data(name='dyck', num_chars=100_000, final=False, char_offset=0):
     if name == 'wp-test':
         return [int(c) + char_offset for c in enwik8_bytes()[2]]
 
+
+def gen_n(p=0.9):
+
+    n = 1
+    while random.random() < p:
+        n += 1
+
+    #-- This is a bit inefficient
+    return n
+
+def gen_aut(num_states=5, num_symbols=3, p=0.3, vocab=256):
+    """
+    Generate a random non-deterministic automaton.
+    :param states:
+    :param symbols:
+    :param p:
+    :return:
+    """
+    assert num_symbols <= vocab
+
+    symbols = random.sample(k=num_symbols, population=range(vocab))
+    states = list(range(num_states))
+
+    edges = []
+    for i in states:
+        for j in states:
+            if random.random() < p:
+                edges.append((i, j, random.choice(symbols))) # an edge
+
+    aut = {i: [] for i in states}
+    for i, j, s in edges:
+        aut[i].append((j, s))
+
+    return aut, symbols
+
+def gen_autseq(aut=None, length=512, vocab=256):
+
+    if aut is None:
+        num_states = gen_n()
+        num_symbols = min(gen_n(), vocab)
+        aut, symbols = gen_aut(num_states=num_states, num_symbols=num_symbols, p=random.random(), vocab=vocab)
+
+    sequence = []
+    state = 0
+
+    while len(sequence) < length:
+        out_edges = aut[state]
+        if len(out_edges) == 0:
+            state = 0
+            sequence.append(symbols[0])
+            # -- If we hit a terminal state, we add the first symbol and reset the state to 0. The addition of a symbol
+            #    ensures that every automaton generates a sequence.
+        else:
+            state, symbol = random.choice(out_edges)
+
+            sequence.append(symbol)
+
+    assert len(sequence) == length
+
+    return sequence
+
+if __name__ == '__main__':
+    print(''.join(str(i) for i in gen_autseq(vocab=10)))
