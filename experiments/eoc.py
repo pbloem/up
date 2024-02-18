@@ -71,12 +71,14 @@ def go(
                 for instance in chars.tolist():
                     seq.extend(instance)
 
-        print(current_wm, up.util.remap(seq)[:32])
-        print()
+        # print(current_wm, up.util.remap(seq)[:32])
+        # print()
 
         results.append( (current_wm, up.util.measure_gzip(seq) / (batches_per_source * batch_size * context)) )
 
-    print(results)
+    results.sort()
+    for w, b in results:
+        print(w,'\t', b)
 
     with open('result.pkl', 'wb') as file:
         pickle.dump(results, file)
