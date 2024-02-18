@@ -28,7 +28,8 @@ def go(
         num_tokens=512,
         temperature=0.0,
         nonlinearity='relu',
-        dp=False
+        dp=False,
+        type='minimal'
     ):
 
     # Initialize the source model
@@ -52,7 +53,10 @@ def go(
             current_wm = random.random() * (wmr[1] - wmr[0]) + wmr[0]
 
         seq = []
-        up.weights_init_minimal(cmp_source, current_wm)
+        if type == 'minimal':
+            up.weights_init_minimal(cmp_source, current_wm)
+        else:
+            raise
 
         for _ in range(batches_per_source):
             with torch.no_grad():
@@ -85,7 +89,7 @@ def go(
 
     results = np.asarray(results)
     plt.figure(figsize=(16,9))
-    plt.scatter(results[:, 0], results[:, 1])
+    plt.scatter(results[:, 0], results[:, 1], s=8, alpha=0.5)
     plt.gca().set_xscale('log')
 
     plt.savefig('results.png')
@@ -101,7 +105,7 @@ def nl(name : str):
         return torch.sigmoid
 
     if name.startswith('sigmoid'):
-        temp = int(name[6])
+        temp = int(name[7])
         return lambda x : torch.sigmoid(x * 10**-temp)
 
     raise Exception(f'Nonlinearity {name} not recognized.')
