@@ -24,6 +24,7 @@ def go(
         emb=768,
         heads=8,
         cdepth=8,
+        its=1,                    # How often to feed the model's output back to itself.
         context=128,
         num_tokens=512,
         temperature=0.0,
@@ -67,14 +68,17 @@ def go(
                 # Re-initialize the parameters of source (i.e. sample a random source)
                 input = torch.randint(low=0, high=num_tokens, size=(batch_size, context), device=d())
 
-                output = cmp_source(input)
+                for _ in range(its):
+                    output = cmp_source(input)
 
-                chars, mask = output[:, :, :-1], output[:, :, -1]
+                    chars, mask = output[:, :, :-1], output[:, :, -1]
 
-                chars = sample(chars, temperature=temperature)
-                mask = torch.sigmoid(mask).to(torch.bool)
+                    chars = sample(chars, temperature=temperature)
+                    mask = torch.sigmoid(mask).to(torch.bool)
 
-                chars[mask] = input[mask]
+                    chars[mask] = input[mask]
+
+                    input = chars
 
                 for instance in chars.tolist():
                     seq.extend(instance)
