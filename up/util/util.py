@@ -6,7 +6,7 @@ import torch.distributions as dist
 from collections import Counter
 from collections.abc import Iterable
 
-import os, math, tqdm, time
+import os, math, tqdm, time, io, gzip, sys
 from tqdm import trange
 
 import warnings
@@ -569,5 +569,42 @@ def is_square(n : int):
             y = mid
 
     return n == x**2 or n == (x+1)**2
+
+def measure_gzip(data_ints):
+    """
+    Measures the gzipped size (in bytes) of a list of integers
+    :param data_ints:
+    :return:
+    """
+
+    data = bytes()
+    for d in data_ints:
+        data += d.to_bytes(4, byteorder='big')
+
+    assert len(data) == 4 * len(data_ints)
+
+    memory = io.BytesIO()
+    gzip_obj = gzip.GzipFile(
+        filename='file.gz', mode='wb', fileobj=memory)
+    gzip_obj.write(data)
+    gzip_obj.close()
+
+    return sys.getsizeof(memory)
+
+def remap(seq, lim=99):
+    """
+    Remaps a sequence of element by frequency. That is, the most frequent elemnt is mapped to the integer 0, the second
+    most frequent to 1 and so on.
+
+    :param seq:
+    :return:
+    """
+
+    ct = Counter(seq)
+    mapdict = { val:i for i, (val, _) in enumerate(ct.most_common(lim))}
+    map = lambda val : mapdict[val] if val in mapdict else lim
+
+    return [map(s) for s in seq]
+
 
 
