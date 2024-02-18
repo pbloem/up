@@ -53,7 +53,11 @@ def go(
             current_wm = random.random() * (wmr[1] - wmr[0]) + wmr[0]
 
         seq = []
-        if type == 'minimal':
+        if type == 'default':
+            up.weights_init(cmp_source, current_wm)
+        elif type == 'plain':
+            up.weights_init_plain(cmp_source, current_wm)
+        elif type == 'minimal':
             up.weights_init_minimal(cmp_source, current_wm)
         else:
             raise
