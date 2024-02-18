@@ -30,7 +30,8 @@ def go(
         temperature=0.0,
         nonlinearity='relu',
         dp=False,
-        type='minimal'
+        type='minimal',
+        skip_mask=False
     ):
 
     # Initialize the source model
@@ -76,7 +77,8 @@ def go(
                     chars = sample(chars, temperature=temperature)
                     mask = torch.sigmoid(mask).to(torch.bool)
 
-                    chars[mask] = input[mask]
+                    if not skip_mask:
+                        chars[mask] = input[mask]
 
                     input = chars
 
