@@ -609,5 +609,21 @@ def remap(seq, lim=99):
 
     return [map(s) for s in seq]
 
+def nl(name : str):
+    if name == 'relu':
+        return torch.relu
+
+    if name == 'sign':
+        return torch.sign
+
+    if name == 'sigmoid':
+        return torch.sigmoid
+
+    if name.startswith('sigmoid'):
+        temp = int(name[7])
+        return lambda x : torch.sigmoid(x * 10**-temp)
+
+    raise Exception(f'Nonlinearity {name} not recognized.')
+
 
 
