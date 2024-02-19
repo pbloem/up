@@ -297,6 +297,9 @@ def sample(lnprobs, temperature=1.0):
     :return: The index of the sampled element.
     """
 
+    assert not lnprobs.isnan().any()
+    assert not lnprobs.isinf().any()
+
     if temperature == 0.0:
         return lnprobs.argmax(dim=-1)
 

@@ -14,6 +14,10 @@ def go(name='toy', num_chars=1_00_000):
         train, val, test = load_str(name='wp-train'), load_str(name='wp-val'), \
                        load_str(name='wp-test')
 
+    print('sample')
+    print(train[:120])
+    print()
+
     # train, val, test = '110011', '110011', '00000'
 
     res = markov(train, val, test, max_order=5, verbose=True)
@@ -24,7 +28,9 @@ def go(name='toy', num_chars=1_00_000):
 
 if __name__ == '__main__':
 
-    go(name='dyck')
-    go(name='toy')
-    go(name='ndfa')
-    go(name='wp')
+    # go(name='bits')
+    go(name='champ')
+    # go(name='dyck')
+    # go(name='toy')
+    # go(name='ndfa')
+    # go(name='wp')
