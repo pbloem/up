@@ -533,7 +533,7 @@ def weights_init_minimal(model, init_mult_max):
     :return:
     """
 
-    logwm = random.random() * math.log(init_mult_max) + 1
+    logwm = random.random() * (math.log(init_mult_max) - 1) + 1
     wm =  math.exp(logwm)
 
     for mod in model.modules():
