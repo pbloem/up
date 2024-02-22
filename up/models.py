@@ -5,7 +5,7 @@ import torch.nn.functional as F
 from former import TransformerBlock, SelfAttention, Attention
 from former.util import d
 
-import random
+import random, math
 
 from .util import Reshape, kl_loss, vae_sample, coords, Lambda
 
@@ -525,9 +525,19 @@ def weights_init_plain(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0):
                 mod.weight.data[mask] = 0.0
 
 
-def weights_init_minimal(model, init_mult):
+def weights_init_minimal(model, init_mult_max):
+    """
+    Samples one random weight multiplier that is applied uniformly to the whole network.
+    :param model:
+    :param init_mult_max:
+    :return:
+    """
+
+    logwm = random.random() * math.log(init_mult_max) + 1
+    wm =  math.exp(logwm)
+
     for mod in model.modules():
         if type(mod) is nn.Linear or type(mod) is nn.Embedding:
 
             mod.reset_parameters()
-            mod.weight.data *= init_mult
+            mod.weight.data *= wm
