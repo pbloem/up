@@ -304,7 +304,7 @@ class GTransformer(nn.Module):
     Transformer for generating text (character by character).
     """
 
-    def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False):
+    def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False, autoregressive=True):
         """
 
         :param emb:
@@ -328,7 +328,7 @@ class GTransformer(nn.Module):
         tblocks = []
         for _ in range(depth):
             tblocks.append(
-                TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=True, nl=nl)
+                TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl)
             )
 
         self.tblocks = nn.ModuleList(modules=tblocks)
