@@ -73,7 +73,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          model_dst = './pretrained-{}.pt', # Where to save the pretrained model Add in an {} for the number of instances
          cp_every = 100_000,       # Save a checkpoint for the model every n batches.
          dp = False,                # Use data-parallel
-         wandb_project = 'up'
+         wandb_project = 'up',
+         eval_at = (60_000, 120_000) # Evaluate at these points during finetuning
        ):
 
     """
@@ -329,7 +330,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     traindata = torch.tensor(up.data.load_data('wp-train'), device='cpu')
 
     for i in (bar := trange(num_batches)):
-        if eval_every > 0 and i % eval_every == 0 and not skip_eval:
+        if (eval_every > 0 and i % eval_every == 0 and not skip_eval) or (i in eval_at):
 
             for name, valdata in datasets.items():
                 print(f'evaluating {name}')
