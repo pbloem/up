@@ -282,11 +282,12 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
                 scaler.scale(loss).backward()
 
-                gn = gradient_norm(model)
-                if gc > 0.0:
-                    nn.utils.clip_grad_norm_(model.parameters(), gc)
-
                 if i % accumulate == 0: # perform a step
+
+                    gn = gradient_norm(model)
+                    if gc > 0.0:
+                        nn.utils.clip_grad_norm_(model.parameters(), gc)
+
                     scaler.step(opt)
                     scaler.update()
 
@@ -295,12 +296,15 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     if warmup > 0:
                         sch.step()
 
-                traintime = toc()
+                    wandb.log({
+                        'gradient_norm': gn,
+                    })
+
+                    traintime = toc()
 
                 wandb.log({
                     'loss': loss,
                     'learning_rate': sch.get_last_lr()[0],
-                    'gradient_norm': gn,
                     'sample_time': sampletime,
                     'train_time': traintime,
                     'pre-training': 1.0
@@ -347,8 +351,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
                 wandb.log({f'val-{name}': est})
 
-        opt.zero_grad()
-
         # sample a batch from the data
         source, target = sample_batch(traindata, context, model_batch_size)
 
@@ -361,9 +363,25 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
         scaler.scale(loss).backward()
 
-        gn = gradient_norm(model)
-        if gc > 0.0:
-            nn.utils.clip_grad_norm_(model.parameters(), gc)
+        if i % accumulate == 0:  # perform a step
+
+            gn = gradient_norm(model)
+            if gc > 0.0:
+                nn.utils.clip_grad_norm_(model.parameters(), gc)
+
+            scaler.step(opt)
+            scaler.update()
+
+            opt.zero_grad()
+
+            if warmup > 0:
+                sch.step()
+
+            wandb.log({
+                'gradient_norm': gn,
+            })
+
+            traintime = toc()
 
         scaler.step(opt)
         scaler.update()
@@ -374,7 +392,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         wandb.log({
             'loss': loss,
             'learning_rate': sch.get_last_lr()[0],
-            'gradient_norm': gn,
             'pre-training': 0.0
         })
 
