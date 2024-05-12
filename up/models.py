@@ -304,7 +304,8 @@ class GTransformer(nn.Module):
     Transformer for generating text (character by character).
     """
 
-    def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False, autoregressive=True):
+    def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False,
+                 autoregressive=True, dropout=0.1):
         """
 
         :param emb:
@@ -328,7 +329,7 @@ class GTransformer(nn.Module):
         tblocks = []
         for _ in range(depth):
             tblocks.append(
-                TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl)
+                TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl, dropout=dropout)
             )
 
         self.tblocks = nn.ModuleList(modules=tblocks)
@@ -357,7 +358,7 @@ class ConditionalBlock(nn.Module):
     Combines a self attention with a cross-attention to a conditional input
     """
 
-    def __init__(self, emb, heads, mask, seq_length, ff_hidden_mult=4, dropout=0.0,
+    def __init__(self, emb, heads, mask, seq_length, ff_hidden_mult=4, dropout=0.1,
                  pos_embedding=None):
         super().__init__()
 

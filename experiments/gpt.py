@@ -72,7 +72,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          model_file = None,            # Filename of a pretrained model/optimizer
          model_dst = './pretrained-{}.pt', # Where to save the pretrained model Add in an {} for the number of instances
          cp_every = 100_000,       # Save a checkpoint for the model every n batches.
-         dp = False                # Use data-parallel
+         dp = False,                # Use data-parallel
+         wandb_project = 'up'
        ):
 
     """
@@ -83,7 +84,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
     wd = wandb.init(
         name=name,
-        project='prior2',
+        project=wandb_project,
         tags=tags,
         config=locals(),
         mode= 'disabled' if debug else 'online'

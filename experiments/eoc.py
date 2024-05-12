@@ -18,7 +18,7 @@ from tqdm import trange
 def go(
         n=1000,                   # number of samples to take (points in the scatterplot
         batch_size=40,            #
-        batches_per_source=50,    # how many batches to try for each sampled source model
+        batches_per_source=1,    # how many batches to try for each sampled source model
         wmr=(1e5, 1e7),           # range of weight multiplier (samples are taken uniformly between these two)
         logspace=False,
         emb=768,
@@ -31,12 +31,13 @@ def go(
         nonlinearity='relu',
         dp=False,
         type='minimal',
-        skip_mask=False
+        skip_mask=False,
+        bidirectional=False
     ):
 
     # Initialize the source model
     cmp_source = up.GTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=num_tokens,
-            nl=nl(nonlinearity), mask_channel=True)
+            nl=nl(nonlinearity), mask_channel=True, autoregressive=not bidirectional)
 
     if torch.cuda.is_available():
         cmp_source.cuda()
