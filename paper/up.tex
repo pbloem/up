@@ -6,6 +6,10 @@
 
 \usepackage{hyperref}
 \usepackage{url}
+\usepackage{charter}
+\usepackage{eulervm}
+
+\usepackage{amssymb,amsmath}
 
 
 \title{Universal pre-training}
@@ -32,6 +36,10 @@ Amsterdam, Netherlands \\
 \newcommand{\fix}{\marginpar{FIX}}
 \newcommand{\new}{\marginpar{NEW}}
 
+\newcommand{\B}{\mathbb B}
+\newcommand{\p}{\text{.}}
+
+
 \iclrfinalcopy % Uncomment for camera-ready version, but NOT for submission.
 \begin{document}
 
@@ -39,351 +47,160 @@ Amsterdam, Netherlands \\
 \maketitle
 
 \begin{abstract}
-We investigate the use of randomly generated data for the sake of pre-training a model, before seeing any domain-specific data. We justify this approach theoretically from the perspective of Kolmogorov complexity. We show empirically that randomly generated data, free of any domain assumptions---save the structural layout of the data---can be used to pretrain a model before it sees data, and that this approach several benefits. First, leads to better-than-chance zero-shot performance, that is, the model has some in-context test-set performance before seeing any training data. Second, when the model is finetuned on training data after pretraining, it converges faster and to better performance, even when the pretraining takes up part of the computational budget. And third, The resulting model shows better generalization both in-domain and out-of-domain. While these experiments are only small scale, we perform a scaling experiment that shows a promising trend.
-
+We investigate the use of randomly generated data for the sake of pre-training a model, before seeing any domain-specific data. We justify this approach theoretically from the perspective of Kolmogorov complexity. We show empirically, in the domain of token sequences, that randomly generated data can be used to pre-train a model a-priori---before the data is seen---and that this approach has several benefits. First, it leads to better-than-chance zero-shot performance. That is, the model shows some in-context test-set performance before seeing \emph{any} training data. Second, when the model is fine-tuned on training data after pretraining, it converges faster and to better performance, even when the pretraining is accounted for in the computational budget. And third, The resulting model shows better generalization both in-domain and out-of-domain. While these experiments are only small-scale, we perform a scaling experiment that shows a promising trend towards larger models.
 \end{abstract}
 
-\section{Submission of conference papers to ICLR 2024}
+\section{Introduction}
 
-ICLR requires electronic submissions, processed by
-\url{https://openreview.net/}. See ICLR's website for more instructions.
+Even in the domain of natural language, machine learning is fast approaching the point where the amount of data on which we would like to train a model is larger than the amount of data available \cite{}. In many other domains, this point has long been passed. At the same time, as artificial intelligence becomes more and more integrated in production systems, the authors of, for instance, literature and art, are less eager for their work to end up in training datasets. In short the question of whether we can do more with less data is increasingly urgent.
 
-If your paper is ultimately accepted, the statement {\tt
-  {\textbackslash}iclrfinalcopy} should be inserted to adjust the
-format to the camera ready requirements.
+One approach is to generate \emph{synthetic data}. This may seem at first to be a false economy: how can we learn something from a data generator that we built ourselves? In information theoretic terms, the data processing inequality (DPI) \cite{} tells us that we cannot increase the information content of a signal by applying computation to it. This seems to preclude the possibility of enriching our models with data from any other source than the real world.
 
-The format for the submissions is a variant of the NeurIPS format.
-Please read carefully the instructions below, and follow them
-faithfully.
+However, the key to valuable data is not information content, it's \emph{structure}. The most information-rich signal, a fully random one, is among the least valuable data to learn from. An interesting source of data provides a mix of randomness and structure.
 
-\subsection{Style}
+Consider the following analogy (from \cite{}). A monkey behind a typewriter, bashing keys at random, will famously produce the complete works of Shakespeare in a large, but finite amount of time. A monkey behind a \emph{computer} will also produce the collected works of Shakespeare, and o so more quickly. This is because there is structure in natural language that may be exploited by a computer program. The second monkey only needs to be lucky enough to type out the computer program, whereas the first monkey needs to be lucky enough to get every single character correct.
 
-Papers to be submitted to ICLR 2024 must be prepared according to the
-instructions presented here.
+The key takeaway is that by taking a source of randomness, a monkey or a random number generator, and passing its output through a computer, we can \emph{enrich} data (from the perspective of machine learning). This may well reduce the amount if information in the data (in the Shannon/Kolmogorov sense of the word), but it adds structure. Structure that a machine learning model can learn, and that may transfer to real-world tasks.
 
-%% Please note that we have introduced automatic line number generation
-%% into the style file for \LaTeXe. This is to help reviewers
-%% refer to specific lines of the paper when they make their comments. Please do
-%% NOT refer to these line numbers in your paper as they will be removed from the
-%% style file for the final version of accepted papers.
+With this principle in mind, we ask the following question. Can we pre-train a model before seeing the data? Can we generate random data, before knowing what our task is, such that pre-training on this random data benefits learning? We show that this is indeed possible, and we call the resulting approach \emph{universal pre-training}. We provide some theoretical foundation for this principle, from the field of Kolmogorov complexity.
 
-Authors are required to use the ICLR \LaTeX{} style files obtainable at the
-ICLR website. Please make sure you use the current files and
-not previous versions. Tweaking the style files may be grounds for rejection.
+Figure~\ref{fig:example} shows a simple example of our approach: a string of ASCII characters chosen uniformly at random, and the result of passing that string through a randomly initialized transformer model. The first string is fully random, and nothing useful may be learned from it. The second string contains structure: certain characters and structures re-occur in a predictable way. We can make sensible predictions about one part of the string by studying another. 
 
-\subsection{Retrieval of style files}
+Some of these basic patterns may transfer to other domains. For instance, the relatiuve frequency of a character at the start of the string, is more likely than not be a reasonable prediction of its probability at the end of the string. Other patterns, such as the specific characters that are frequent, are entirely specific to this sample, and will disappear if we re-initialize the network, and pass another random string through. 
 
-The style files for ICLR and other conference information are available online at:
-\begin{center}
-   \url{http://www.iclr.cc/}
-\end{center}
-The file \verb+iclr2024_conference.pdf+ contains these
-instructions and illustrates the
-various formatting requirements your ICLR paper must satisfy.
-Submissions must be made using \LaTeX{} and the style files
-\verb+iclr2024_conference.sty+ and \verb+iclr2024_conference.bst+ (to be used with \LaTeX{}2e). The file
-\verb+iclr2024_conference.tex+ may be used as a ``shell'' for writing your paper. All you
-have to do is replace the author, title, abstract, and text of the paper with
-your own.
+Our results show that we can trade off compute for data. By pre-training on entirely synthetic data, sampled in this manner---by passing fully random data through a computational process---we end up with a model that is better initialized once it starts seeing the real-world data. We show that a model prepared with universal pretraining reaches better performance than a model that has been initialized traditionally. We also show better out-of distribution performance, and better generalization.
 
-The formatting instructions contained in these style files are summarized in
-sections \ref{gen_inst}, \ref{headings}, and \ref{others} below.
+\section{Preliminaries}
 
-\section{General formatting instructions}
-\label{gen_inst}
+We will briefly review the required preliminaries. See \cite{} for a more detailed treatment. These are mostly required to understand the theoretical framework we use to show that universal pre-training is feasible. To understand the experimental part of the paper, the intuitive explanation in the introduction should suffice.
 
-The text must be confined within a rectangle 5.5~inches (33~picas) wide and
-9~inches (54~picas) long. The left margin is 1.5~inch (9~picas).
-Use 10~point type with a vertical spacing of 11~points. Times New Roman is the
-preferred typeface throughout. Paragraphs are separated by 1/2~line space,
-with no indentation.
+Let $\B$ be the set of finite binary strings. We will use Turing machines to model computable probability distributions on $\B$. To this end we, fix Turing machines with a single input tape and a separate output tape. The read-head on the input tape is only allowed to move one way: the effect is that after reading a bit from the input tape, the machine either halts, reads the next bit, or computes infitenly without doing either. This means that the set of inputs on which a machine halts forms a prefix-free set: no halting input is the prefix of another halting input. 
 
-Paper title is 17~point, in small caps and left-aligned.
-All pages should start at 1~inch (6~picas) from the top of the page.
+If a machine $T$ halts, we take the input bits it has read as its input $x$, and the value on its output tape when it halts as its output $y$, writing $T(x) = y$. We write $T(x)=\infty$ for an input on which the machine does not halt.
 
-Authors' names are
-set in boldface, and each name is placed above its corresponding
-address. The lead author's name is to be listed first, and
-the co-authors' names are set to follow. Authors sharing the
-same address can be on the same line.
+We can now use such machines to simulate probability distributions, but feeding it random bits. We start the machine, and whenever it reads from the input tape, we sample a random bit and provide it. If the machine halts, we take the output as our sample.\footnotemark
 
-Please pay special attention to the instructions in section \ref{others}
-regarding figures, tables, acknowledgments, and references.
+\footnotetext{Since the machine may not halt, this is a deficient distribution on $\B$. However, we will mostly deal with subsets of the Turing machines that always halt. If we place no restrictions on the Turing machines used, we have defined the class of \emph{lower semicomputable semimeasures}. We will refer to these as the computable distributions for the sake of simplicity.}
+
+We assume that we are given some enumeration $T_i$ of all Turing machines. We refer to the probability of sampling $y$ from $T_i$ as $p_i(y)$. Since each input $x$ is samples with exactly probability $2^{|x|}$, where $|\cdot|$ denotes string lengths, we can write $p_i$ as
+
+$$
+p_i(y) = \sum_{x : T_i(x) = y} 2^{|x|} \p  
+$$
+
+Next, assume a pairing function $(i, x)$ that encodes $i$ and $x$ into a single string in $\B$, then we can define a universal Turing machine $U((i, x)) = T_i(x)$, which unpacks the pairing function and then simulates the running of the $i$-th Turing machine on input $x$. If the pairing function uses prefix-free codewords, which is easy to achieve, then $U$ itself  occurs somewhere in the enumeration $T_i$. \footnotemark
+
+\footnotetext{A simple way to achieve this is to define a prefix-free encoding of $\B$, written as $\bar x$. We can then use the pairing function $(i, x) = \bar i\bar x$, since concatenating two prefix-free codewords results in another prefix-free code.}
+
+With this, we can sample from $U$. This effectively samples a Turing machine $i$ according to some prior probability $p(i)$, and then samples an output $y$ according to  $p_i(y)$. We call this the \emph{universal distribution} $m(y)$. The universal distribution is a Bayesian mixture over the class of computable distributions.
 
 
-There will be a strict upper limit of 9 pages for the main text of the initial submission, with unlimited additional pages for citations. 
+\section{Related work}
 
-\section{Headings: first level}
-\label{headings}
+\subsection{Synthetic data}
 
-First level headings are in small caps,
-flush left and in point size 12. One line space before the first level
-heading and 1/2~line space after the first level heading.
+Training on synthetic data goes back to the simple principles of data augmentation. \cite{} In recent years, much research has been devoted to the use of simulators generating synthetic data to encode very specific domain assumptions. For instance, in training self-driving cars, robotics control, tabular data, ...
 
-\subsection{Headings: second level}
+Our work with this trend, but with the change that we aim to make the assumptions on the domain \emph{minimal}. In its most general form, universal pre-training only assumes that the source of the downstream dataset is \emph{computational} in nature. This allows one form of pre-training to be used for a wide variety of downstream tasks.
 
-Second level headings are in small caps,
-flush left and in point size 10. One line space before the second level
-heading and 1/2~line space after the second level heading.
+\subsection{The No-Free Lunch Theorem}
 
-\subsubsection{Headings: third level}
+The idea of pre-training a model irrespective of its task seems to fly in the face of the no-free-lunch theorem \cite{}, which states that, averaged over all tasks, all models perform the same. This suggests that if our pre-training makes any change at all to the model's performance on a subset of tasks, it must reduce its performance on other tasks.
 
-Third level headings are in small caps,
-flush left and in point size 10. One line space before the third level
-heading and 1/2~line space after the third level heading.
+This is the case, but it's possible to get out of the NFL theorem with a very broad, almost universal assumption about our data: that the process |$p$ that generated it is computational. That is, it can be simulated by a probabilistic Turing machine. Under this assumption, the source of our data is \emph{dominated} by the universal distribution $m$, and by any class-universal distribution $m_C$ for which $p \in C$. 
 
-\section{Citations, figures, tables, references}
-\label{others}
+This means that there are computable probability distributions $m_CC$ that fit our data as well as its source $p$ does (up to a multiplicative constant). Moreover, this holds for all $p \in C$. Therefore, $m_C$ provides a universal predictor for $C$. This does not violate the NFL theorem, because we do make an assumption about the data, namely that it comes from a source in $C$. However, $C$ can be made \emph{very} broad, for instance the class of all polynomial-time Turing machines, while still allowing practical sampling.
 
-These instructions apply to everyone, regardless of the formatter being used.
+By training on samples from $m_C$, we are essentially approximating it in our pre-trained model.\footnotemark
 
-\subsection{Citations within the text}
+--Yuki Asano's work.
 
-Citations within the text should be based on the \texttt{natbib} package
-and include the authors' last names and year (with the ``et~al.'' construct
-for more than two authors). When the authors or the publication are
-included in the sentence, the citation should not be in parenthesis using \verb|\citet{}| (as
-in ``See \citet{Hinton06} for more information.''). Otherwise, the citation
-should be in parenthesis using \verb|\citep{}| (as in ``Deep learning shows promise to make progress
-towards AI~\citep{Bengio+chapter2007}.'').
+\section{Method}
 
-The corresponding references are to be listed in alphabetical order of
-authors, in the \textsc{References} section. As to the format of the
-references themselves, any style is acceptable as long as it is used
-consistently.
+\subsection{Theoretical framework}
 
-\subsection{Footnotes}
+Let $C$ be a set of computable functions from $\B$ to $\B$. If de define some prior on $C$, we can easily sample from $m_C$. We can now sample a random model from $C$, feed it random bits, and observe the output.
 
-Indicate footnotes with a number\footnote{Sample of the first footnote} in the
-text. Place the footnotes at the bottom of the page on which they appear.
-Precede the footnote with a horizontal rule of 2~inches
-(12~picas).\footnote{Sample of the second footnote}
+By the logic spelled out in the introduction, this output is more likely to contain interesting structure than the original random bits. We could proceed by pre-training a model on samples from $m_C$ directly, but we can enhance the depth of our data still more. 
 
-\subsection{Figures}
+The idea is that if taking a uniform random string and passing it through a computable function produce `interesting' data, the it's possible that taking interesting data and passing it through a computable function, creates even more interesting data. 
 
-All artwork must be neat, clean, and legible. Lines should be dark
-enough for purposes of reproduction; art work should not be
-hand-drawn. The figure number and caption always appear after the
-figure. Place one line space before the figure caption, and one line
-space after the figure. The figure caption is lower case (except for
-first word and proper nouns); figures are numbered consecutively.
+That is, if we take the output of the monkey behind the computer, and feed it into another computer, are we even more likely to produce Shakespeare? If the computers are universal, we cannot boost its power this way, but if their resources are limited, we can. For instance, if the computer is only allowed to run for 1 minute, this provides a computer that is allowed to run for 2 minutes.
 
-Make sure the figure caption does not get separated from the figure.
-Leave sufficient space to avoid splitting the figure and figure caption.
+We can formalize and prove this intuition as follows. Let $p_u$ be a base distribution on $\B$ which is uniform in the sense that all string of the same length have equal probability.
 
-You may use color figures.
-However, it is best for the
-figure captions and the paper body to make sense if the paper is printed
-either in black/white or in color.
-\begin{figure}[h]
-\begin{center}
-%\framebox[4.0in]{$\;$}
-\fbox{\rule[-.5cm]{0cm}{4cm} \rule[-.5cm]{4cm}{0cm}}
-\end{center}
-\caption{Sample figure caption.}
-\end{figure}
-
-\subsection{Tables}
-
-All tables must be centered, neat, clean and legible. Do not use hand-drawn
-tables. The table number and title always appear before the table. See
-Table~\ref{sample-table}.
-
-Place one line space before the table title, one line space after the table
-title, and one line space after the table. The table title must be lower case
-(except for first word and proper nouns); tables are numbered consecutively.
-
-\begin{table}[t]
-\caption{Sample table title}
-\label{sample-table}
-\begin{center}
-\begin{tabular}{ll}
-\multicolumn{1}{c}{\bf PART}  &\multicolumn{1}{c}{\bf DESCRIPTION}
-\\ \hline \\
-Dendrite         &Input terminal \\
-Axon             &Output terminal \\
-Soma             &Cell body (contains cell nucleus) \\
-\end{tabular}
-\end{center}
-\end{table}
-
-\section{Default Notation}
-
-In an attempt to encourage standardized notation, we have included the
-notation file from the textbook, \textit{Deep Learning}
-\cite{goodfellow2016deep} available at
-\url{https://github.com/goodfeli/dlbook_notation/}.  Use of this style
-is not required and can be disabled by commenting out
-\texttt{math\_commands.tex}.
+Let $m^1_C = m_C$ be the distribution defined by the process of sampling $u$ from $p_u$ and $f$ from $p(C)$ and computing $f(u)$. Then, let $m^{n+1}_C$ be the distribution defined by the process of sampling $u$ from $m^n_C$ and $f$ from $p(C)$ and computing $f(u)$
 
 
-\centerline{\bf Numbers and Arrays}
-\bgroup
-\def\arraystretch{1.5}
-\begin{tabular}{p{1in}p{3.25in}}
-$\displaystyle a$ & A scalar (integer or real)\\
-$\displaystyle \va$ & A vector\\
-$\displaystyle \mA$ & A matrix\\
-$\displaystyle \tA$ & A tensor\\
-$\displaystyle \mI_n$ & Identity matrix with $n$ rows and $n$ columns\\
-$\displaystyle \mI$ & Identity matrix with dimensionality implied by context\\
-$\displaystyle \ve^{(i)}$ & Standard basis vector $[0,\dots,0,1,0,\dots,0]$ with a 1 at position $i$\\
-$\displaystyle \text{diag}(\va)$ & A square, diagonal matrix with diagonal entries given by $\va$\\
-$\displaystyle \ra$ & A scalar random variable\\
-$\displaystyle \rva$ & A vector-valued random variable\\
-$\displaystyle \rmA$ & A matrix-valued random variable\\
-\end{tabular}
-\egroup
-\vspace{0.25cm}
+\subsection{Practical approach}
 
-\centerline{\bf Sets and Graphs}
-\bgroup
-\def\arraystretch{1.5}
+To test these ideas in practice, we make the following changes and implementation choices. 
 
-\begin{tabular}{p{1.25in}p{3.25in}}
-$\displaystyle \sA$ & A set\\
-$\displaystyle \R$ & The set of real numbers \\
-$\displaystyle \{0, 1\}$ & The set containing 0 and 1 \\
-$\displaystyle \{0, 1, \dots, n \}$ & The set of all integers between $0$ and $n$\\
-$\displaystyle [a, b]$ & The real interval including $a$ and $b$\\
-$\displaystyle (a, b]$ & The real interval excluding $a$ but including $b$\\
-$\displaystyle \sA \backslash \sB$ & Set subtraction, i.e., the set containing the elements of $\sA$ that are not in $\sB$\\
-$\displaystyle \gG$ & A graph\\
-$\displaystyle \parents_\gG(\ervx_i)$ & The parents of $\ervx_i$ in $\gG$
-\end{tabular}
-\vspace{0.25cm}
+First, instead of training on sequences of bits, we take our token alphabet from the expected downstream task. These are ASCII characters in the first experiment and WordPiece tokens in the second. While this does reduce the universality of our approach somewhat, it suffices for a proof-of-concept (see also the discussion).
+
+For ease of implementation we limit ourselves to sequences of a fixed length. This makes memory use predictable. Our class of source models $C$ is a model class of single-stack transformers with causal self-attention. The architecture is detailed in the appendix. We sample from $C$ simply by initializing its parts using the standard algorithm for the part (also detailed in the appendix), and then scaling all parameters by a fixed constant afterwards. 
+
+For efficiency and ease of implementation, we initialize a single model $f_i$, and sample a batch of $n$ instances from it. This means that the batch is \emph{not} independently samples from $m_C$. Training directly on such batches would create a bias at each gradient update for the patterns that are specific to $i$. 
+
+To approximate independent sampling, we instead keep a buffer of $k$ samples. Each iteration, we take $n$ instances $x$ from the buffer and replace them by $f_i(x)$. We then sample $n$ random instances again for our target model to train on. We also replace a small proportion $\alpha$ of instances in the buffer with (pseudo-)random noise, to stop the amount of entropy becoming to low.
+
+While this does not fully ensure that the samples are independent, it ensures that that patterns from different models $i$ appear in the data. 
+
+Moreover, because we are sampling structured noise, and feeding it back into the data, Theorem~\ref{} tells us that we are approximating a sample from a mixture over the infinite sequence of models $m^1_C, m^2_C\ldots$, while only passing one batch of instances through one model from $C$ (the cost of a direct sample from $m^1_C$).\footnotemark
+\footnotetext{The probability of a sample coming from $m^n_C$ decays exponentially with $n$, so this claim should be taken with a pinch of salt.}
+
+The complete algorithm is detailed in Algorithm~\ref{}.
+
+On these samples, we train a standard autoregressive transformer (architecture and training details in the appendix) by shifting the sequences one one character to the left to form the target value.
 
 
-\centerline{\bf Indexing}
-\bgroup
-\def\arraystretch{1.5}
-
-\begin{tabular}{p{1.25in}p{3.25in}}
-$\displaystyle \eva_i$ & Element $i$ of vector $\va$, with indexing starting at 1 \\
-$\displaystyle \eva_{-i}$ & All elements of vector $\va$ except for element $i$ \\
-$\displaystyle \emA_{i,j}$ & Element $i, j$ of matrix $\mA$ \\
-$\displaystyle \mA_{i, :}$ & Row $i$ of matrix $\mA$ \\
-$\displaystyle \mA_{:, i}$ & Column $i$ of matrix $\mA$ \\
-$\displaystyle \etA_{i, j, k}$ & Element $(i, j, k)$ of a 3-D tensor $\tA$\\
-$\displaystyle \tA_{:, :, i}$ & 2-D slice of a 3-D tensor\\
-$\displaystyle \erva_i$ & Element $i$ of the random vector $\rva$ \\
-\end{tabular}
-\egroup
-\vspace{0.25cm}
+\section{Experiments}
 
 
-\centerline{\bf Calculus}
-\bgroup
-\def\arraystretch{1.5}
-\begin{tabular}{p{1.25in}p{3.25in}}
-% NOTE: the [2ex] on the next line adds extra height to that row of the table.
-% Without that command, the fraction on the first line is too tall and collides
-% with the fraction on the second line.
-$\displaystyle\frac{d y} {d x}$ & Derivative of $y$ with respect to $x$\\ [2ex]
-$\displaystyle \frac{\partial y} {\partial x} $ & Partial derivative of $y$ with respect to $x$ \\
-$\displaystyle \nabla_\vx y $ & Gradient of $y$ with respect to $\vx$ \\
-$\displaystyle \nabla_\mX y $ & Matrix derivatives of $y$ with respect to $\mX$ \\
-$\displaystyle \nabla_\tX y $ & Tensor containing derivatives of $y$ with respect to $\tX$ \\
-$\displaystyle \frac{\partial f}{\partial \vx} $ & Jacobian matrix $\mJ \in \R^{m\times n}$ of $f: \R^n \rightarrow \R^m$\\
-$\displaystyle \nabla_\vx^2 f(\vx)\text{ or }\mH( f)(\vx)$ & The Hessian matrix of $f$ at input point $\vx$\\
-$\displaystyle \int f(\vx) d\vx $ & Definite integral over the entire domain of $\vx$ \\
-$\displaystyle \int_\sS f(\vx) d\vx$ & Definite integral with respect to $\vx$ over the set $\sS$ \\
-\end{tabular}
-\egroup
-\vspace{0.25cm}
+First, we sample sequences not consisting of bits but of a character set or 128 or 256 characters.\footnotemark 
 
-\centerline{\bf Probability and Information Theory}
-\bgroup
-\def\arraystretch{1.5}
-\begin{tabular}{p{1.25in}p{3.25in}}
-$\displaystyle P(\ra)$ & A probability distribution over a discrete variable\\
-$\displaystyle p(\ra)$ & A probability distribution over a continuous variable, or over
-a variable whose type has not been specified\\
-$\displaystyle \ra \sim P$ & Random variable $\ra$ has distribution $P$\\% so thing on left of \sim should always be a random variable, with name beginning with \r
-$\displaystyle  \E_{\rx\sim P} [ f(x) ]\text{ or } \E f(x)$ & Expectation of $f(x)$ with respect to $P(\rx)$ \\
-$\displaystyle \Var(f(x)) $ &  Variance of $f(x)$ under $P(\rx)$ \\
-$\displaystyle \Cov(f(x),g(x)) $ & Covariance of $f(x)$ and $g(x)$ under $P(\rx)$\\
-$\displaystyle H(\rx) $ & Shannon entropy of the random variable $\rx$\\
-$\displaystyle \KL ( P \Vert Q ) $ & Kullback-Leibler divergence of P and Q \\
-$\displaystyle \mathcal{N} ( \vx ; \vmu , \mSigma)$ & Gaussian distribution %
-over $\vx$ with mean $\vmu$ and covariance $\mSigma$ \\
-\end{tabular}
-\egroup
-\vspace{0.25cm}
-
-\centerline{\bf Functions}
-\bgroup
-\def\arraystretch{1.5}
-\begin{tabular}{p{1.25in}p{3.25in}}
-$\displaystyle f: \sA \rightarrow \sB$ & The function $f$ with domain $\sA$ and range $\sB$\\
-$\displaystyle f \circ g $ & Composition of the functions $f$ and $g$ \\
-  $\displaystyle f(\vx ; \vtheta) $ & A function of $\vx$ parametrized by $\vtheta$.
-  (Sometimes we write $f(\vx)$ and omit the argument $\vtheta$ to lighten notation) \\
-$\displaystyle \log x$ & Natural logarithm of $x$ \\
-$\displaystyle \sigma(x)$ & Logistic sigmoid, $\displaystyle \frac{1} {1 + \exp(-x)}$ \\
-$\displaystyle \zeta(x)$ & Softplus, $\log(1 + \exp(x))$ \\
-$\displaystyle || \vx ||_p $ & $\normlp$ norm of $\vx$ \\
-$\displaystyle || \vx || $ & $\normltwo$ norm of $\vx$ \\
-$\displaystyle x^+$ & Positive part of $x$, i.e., $\max(0,x)$\\
-$\displaystyle \1_\mathrm{condition}$ & is 1 if the condition is true, 0 otherwise\\
-\end{tabular}
-\egroup
-\vspace{0.25cm}
+\footnotetext{We use 7 bits ASCII characters for experiments where we print the sampled strings, and 8 bits extended ASCII character}
 
 
+\section{Discussion}
 
-\section{Final instructions}
-Do not change any aspects of the formatting parameters in the style files.
-In particular, do not modify the width or length of the rectangle the text
-should fit into, and do not change font sizes (except perhaps in the
-\textsc{References} section; see below). Please note that pages should be
-numbered.
+There are three main ingredients in the modern machine learning process that limit how well we do: the fundamental abilities of the algorithm, the available amount of data and the available amount of computational resources. This paper shows that, at least to some extent, it is possible to trade off computational resources for data. We can generate structured random data to pre-train our models, making them require less real-world training data by comparison.
 
-\section{Preparing PostScript or PDF files}
+Moreover, the pre-training is in some sense universal. That is, the same pre-training can benefit a large amount of downstream tasks. This allows us to amortize the pre-training over many different tasks, reducing the cost of the tradeoff. 
 
-Please prepare PostScript or PDF files with paper size ``US Letter'', and
-not, for example, ``A4''. The -t
-letter option on dvips will produce US Letter files.
+\subsection{Limitations and Future Work}
 
-Consider directly generating PDF files using \verb+pdflatex+
-(especially if you are a MiKTeX user).
-PDF figures must be substituted for EPS figures, however.
+\paragraph{approximation of $m_C$} We can show that $m_C$ is a universal model for any $p\in C$. We then proceed by approximating $m_C$ by training a model on samples from it. However, the model we use is not much more complex than $p$.
 
-Otherwise, please generate your PostScript and PDF files with the following commands:
-\begin{verbatim}
-dvips mypaper.dvi -t letter -Ppdf -G0 -o mypaper.ps
-ps2pdf mypaper.ps mypaper.pdf
-\end{verbatim}
+There is no guarantee that a simple model that is not much more complex than $p$ can simulate $m_C$. Generally, it's likely the case that $m_C$ needs to be of higher complexity than any element in $C$.\footnotemark
 
-\subsection{Margins in LaTeX}
+\footnotetext{There aren't (to the best of our knowledge) any non-trivial separation proofs. } 
 
-Most of the margin problems come from figures positioned by hand using
-\verb+\special+ or other commands. We suggest using the command
-\verb+\includegraphics+
-from the graphicx package. Always specify the figure width as a multiple of
-the line width as in the example below using .eps graphics
-\begin{verbatim}
-   \usepackage[dvips]{graphicx} ...
-   \includegraphics[width=0.8\linewidth]{myfile.eps}
-\end{verbatim}
-or % Apr 2009 addition
-\begin{verbatim}
-   \usepackage[pdftex]{graphicx} ...
-   \includegraphics[width=0.8\linewidth]{myfile.pdf}
-\end{verbatim}
-for .pdf graphics.
-See section~4.4 in the graphics bundle documentation (\url{http://www.ctan.org/tex-archive/macros/latex/required/graphics/grfguide.ps})
+In our work we simply give our model which approximates $m_C$ the same complexity as the models in $C$. It's unlikely that this leads to a convergent approximation, even in optimal conditions. Most likely the approximation simply lacks the required computational complexity. 
 
-A number of width problems arise when LaTeX cannot properly hyphenate a
-line. Please give LaTeX hyphenation hints using the \verb+\-+ command.
+For the time being, without any theoretical guarantees we simple assume that an imperfect approximation of $m_C$ is still likely to produce effective pretraining for any task in $C$, and proceed empirically. This leaves several theoretical questions unanswered: (a) what is the computational complexity of $m_C$? (b) Under what conditions is $m_C$ effectively learnable? (c) If there are fundamental limitations in our learned approximation of $m_C$, what are the implications for the effectiveness pretraining?
 
-\subsubsection*{Author Contributions}
-If you'd like to, you may include  a section for author contributions as is done
-in many journals. This is optional and at the discretion of the authors.
+In short, we use our theoretical framework to show what is possible \emph{in principle}, despite seeming objections from results like the NFL theorem. We then show experimentally, that the expected results can, in at least one domain, be achieved. However, the theoretical framework is insufficient, as yet to say anything about when universal pre-training is guaranteed to work. We leave this to future work.
+
+\paragraph{Universality of assumptions} Calling the specific approach used in our experiments \emph{universal} is perhaps a slight overstatement. We do not sample from a universal distribution (which is not tractable). A class-universal distribution with a sufficiently broad class (like $P$) would still justify the name universal pre-training (since it's very likely that all data sources are in that class), but we fall short of that as well.
+
+First, in the interest of efficient generation, our class $C$ is limited to finite strings, and to the transformer architecture. While the stacking trick allows, arbitrary sampling depths (in theory), This does not necessarily mean that we are sampling from the distribution on arbitrarily deep transformers. 
+
+Moreover, we have manipulated the specifics of the source model somewhat to generate data that looks, on inspection like it contains reasonable structure. This may provide some bias towards the kind of patterns that are likely to appear in our downstream tasks. 
+
+In short, while the framework as we have described it, in its most general terms deserves the moniker \emph{universal}, our practical implementation of it is more of an approximation to this ideal.
+
+Finally, in our experiments, we pre-train our model using the token alphabet of the downstream task. This approach limits the universal applicability to any model with that token set. Note that the content of the token set doesn't matter, so we only need to know the number of tokens that will be expected in the downstream task. We accept this limitation for the sake of simple proof-of-concept. In more serious applications, one solution would be to agree on a universal number of tokens (or at least an upper bound). 
+
+Another solution might be to dynamically set the number of tokens and use a method analogous to position encodings to create non-learnable vector representations for the tokens.
+
+Of course, token-based transformers are in some sense an artifact of natural language modeling. As models like the IO performer show, we can move to a more universal data representation (such as bits strings) to increase the universality of our per-trained model.
+
+\paragraph{Other domains} Our experiments are limited to token sequences. That is, string of tokens from a finite vocabulary. In principle, the same idea could be applied to computer vision, continuous time series and any other domains. We leave this to future work.
+
+\paragraph{Other computational sources} For ease of implementation, we use the same type of model for our source of randomness as for our pre-trained model. this is not strictly necessary. For instance, we could easy sample probabilistic string models from different levels of the Chomsky hierarchy. These models can be sampled very efficiently, and may allow more interesting structure to emerge more quickly than it would from our source model.
 
 \subsubsection*{Acknowledgments}
-Use unnumbered third level headings for the acknowledgments. All
-acknowledgments, including those to funding agencies, go at the end of the paper.
 
 
 \bibliography{iclr2024_conference}

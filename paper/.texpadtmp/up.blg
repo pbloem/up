@@ -2,20 +2,20 @@ This is BibTeX, Version 0.99d (TeX Live 2023)
 Capacity: max_strings=200000, hash_size=200000, hash_prime=170003
 The top-level auxiliary file: /Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.aux
 I couldn't open database file iclr2024_conference.bib
----line 38 of file /Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.aux
+---line 34 of file /Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.aux
  : \bibdata{iclr2024_conference
  :                             }
 I'm skipping whatever remains of this command
 I couldn't open style file iclr2024_conference.bst
----line 39 of file /Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.aux
+---line 35 of file /Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.aux
  : \bibstyle{iclr2024_conference
  :                              }
 I'm skipping whatever remains of this command
 I found no database files---while reading file /Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.aux
 I found no style file---while reading file /Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.aux
-You've used 3 entries,
+You've used 1 entry,
             0 wiz_defined-function locations,
-            89 strings with 683 characters,
+            84 strings with 613 characters,
 and the built_in function-call counts, 0 in all, are:
 = -- 0
 > -- 0

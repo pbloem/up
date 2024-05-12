@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex 2023.6.20)  12 AUG 2023 14:38
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023) (preloaded format=pdflatex 2023.6.20)  24 NOV 2023 16:15
 entering extended mode
  restricted \write18 enabled.
  file:line:error style messages enabled.
@@ -259,10 +259,16 @@ Package: uniquecounter 2019/12/15 v1.4 Provide unlimited unique counter (HO)
 Package uniquecounter Info: New unique counter `rerunfilecheck' on input line 285.
 )
 \Hy@SectionHShift=\skip64
+) (/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/charter.sty
+Package: charter 2020/03/25 PSNFSS-v9.3 (P.Dyballa) 
+) (/usr/local/texlive/2023/texmf-dist/tex/latex/eulervm/eulervm.sty
+Package: eulervm 2005/01/11 v4.0 (WaS)
+) (/usr/local/texlive/2023/texmf-dist/tex/latex/amsfonts/amssymb.sty
+Package: amssymb 2013/01/14 v3.01 AMS font symbols
 )
-LaTeX Font Info:    Trying to load font information for OT1+ptm on input line 36.
- (/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ot1ptm.fd
-File: ot1ptm.fd 2001/06/04 font definitions for OT1/ptm.
+LaTeX Font Info:    Trying to load font information for OT1+bch on input line 44.
+ (/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ot1bch.fd
+File: ot1bch.fd 2004/10/18 font definitions for OT1/bch.
 ) (/usr/local/texlive/2023/texmf-dist/tex/latex/l3backend/l3backend-pdftex.def
 File: l3backend-pdftex.def 2023-01-16 L3 backend support: PDF output (pdfTeX)
 \l__color_backend_stack_int=\count283
@@ -270,24 +276,24 @@ File: l3backend-pdftex.def 2023-01-16 L3 backend support: PDF output (pdfTeX)
 ) (/Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.aux)
 \openout1 = `up.aux'.
 
-LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
-LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 36.
-LaTeX Font Info:    ... okay on input line 36.
+LaTeX Font Info:    Checking defaults for OML/cmm/m/it on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for OMS/cmsy/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for OT1/cmr/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for T1/cmr/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for TS1/cmr/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for OMX/cmex/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for U/cmr/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for PD1/pdf/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
+LaTeX Font Info:    Checking defaults for PU/pdf/m/n on input line 44.
+LaTeX Font Info:    ... okay on input line 44.
  (/usr/local/texlive/2023/texmf-dist/tex/context/base/mkii/supp-pdf.mkii
 [Loading MPS to PDF converter (version 2006.09.02).]
 \scratchcounter=\count284
@@ -302,86 +308,72 @@ LaTeX Font Info:    ... okay on input line 36.
 \makeMPintoPDFobject=\count289
 \everyMPtoPDFconversion=\toks23
 )
-Package hyperref Info: Link coloring OFF on input line 36.
+Package hyperref Info: Link coloring OFF on input line 44.
  (/Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.out) (/Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.out)
 \@outlinefile=\write3
 \openout3 = `up.out'.
 
-LaTeX Font Info:    Trying to load font information for U+msa on input line 40.
- (/usr/local/texlive/2023/texmf-dist/tex/latex/amsfonts/umsa.fd
-File: umsa.fd 2013/01/14 v3.01 AMS symbols A
+LaTeX Font Info:    Trying to load font information for U+zeur on input line 48.
+ (/usr/local/texlive/2023/texmf-dist/tex/latex/eulervm/uzeur.fd
+File: uzeur.fd 2005/01/11 v4.0 (WaS)
 )
-LaTeX Font Info:    Trying to load font information for U+msb on input line 40.
- (/usr/local/texlive/2023/texmf-dist/tex/latex/amsfonts/umsb.fd
-File: umsb.fd 2013/01/14 v3.01 AMS symbols B
+LaTeX Font Info:    Trying to load font information for U+zeus on input line 48.
+ (/usr/local/texlive/2023/texmf-dist/tex/latex/eulervm/uzeus.fd
+File: uzeus.fd 2005/01/11 v4.0 (WaS)
 )
-LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 40.
+LaTeX Font Info:    Trying to load font information for U+zeuex on input line 48.
+ (/usr/local/texlive/2023/texmf-dist/tex/latex/eulervm/uzeuex.fd
+File: uzeuex.fd 2005/01/11 v4.0 (WaS)
+)
+LaTeX Font Info:    Trying to load font information for OT1+pcr on input line 48.
  (/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ot1pcr.fd
 File: ot1pcr.fd 2001/06/04 font definitions for OT1/pcr.
-)
-LaTeX Font Info:    Trying to load font information for OMS+pcr on input line 52.
- (/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/omspcr.fd
-File: omspcr.fd 
-)
-LaTeX Font Info:    Font shape `OMS/pcr/m/n' in size <10> not available
-(Font)              Font shape `OMS/cmsy/m/n' tried instead on input line 52.
- [1
+) [1
 
 {/usr/local/texlive/2023/texmf-var/fonts/map/pdftex/updmap/pdftex.map}{/usr/local/texlive/2023/texmf-dist/fonts/enc/dvips/base/8r.enc}]
 
-Package natbib Warning: Citation `Hinton06' on page 2 undefined on input line 146.
+LaTeX Warning: Reference `fig:example' on page 2 undefined on input line 67.
 
 
-Package natbib Warning: Citation `Bengio+chapter2007' on page 2 undefined on input line 148.
+Underfull \vbox (badness 3746) has occurred while \output is active []
 
-[2]
-
-Package natbib Warning: Citation `goodfellow2016deep' on page 3 undefined on input line 214.
-
-LaTeX Font Info:    Trying to load font information for OT1+phv on input line 227.
-(/usr/local/texlive/2023/texmf-dist/tex/latex/psnfss/ot1phv.fd
-File: ot1phv.fd 2020/03/25 scalable font definitions for OT1/phv.
-)
-LaTeX Font Info:    Font shape `OT1/phv/bx/n' in size <10> not available
-(Font)              Font shape `OT1/phv/b/n' tried instead on input line 227.
-LaTeX Font Info:    Font shape `OT1/phv/bx/n' in size <7> not available
-(Font)              Font shape `OT1/phv/b/n' tried instead on input line 227.
-LaTeX Font Info:    Font shape `OT1/phv/bx/n' in size <5> not available
-(Font)              Font shape `OT1/phv/b/n' tried instead on input line 227.
-
-Underfull \vbox (badness 10000) has occurred while \output is active []
+ [2]
+Underfull \vbox (badness 2088) has occurred while \output is active []
 
  [3]
+
+LaTeX Warning: Reference `' on page 4 undefined on input line 149.
+
+
 Underfull \vbox (badness 10000) has occurred while \output is active []
 
  [4]
-Underfull \vbox (badness 10000) has occurred while \output is active []
 
- [5] (/Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.bbl)
+LaTeX Warning: Reference `' on page 5 undefined on input line 152.
 
-Package natbib Warning: There were undefined citations.
+[5] (/Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.bbl) [6] (/Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.aux)
 
-[6] (/Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.aux)
+LaTeX Warning: There were undefined references.
+
 Package rerunfilecheck Info: File `up.out' has not changed.
-(rerunfilecheck)             Checksum: 0E410EACC197D5E977A23C24F9714A33;2689.
- )
-(\end occurred inside a group at level 1)
-
-### simple group (level 1) entered at line 240 ({)
-### bottom level 
+(rerunfilecheck)             Checksum: 876876456384D42177A2CF833EC0513B;1505.
+ ) 
 Here is how much of TeX's memory you used:
- 10538 strings out of 476025
- 157715 string characters out of 5790017
- 1869388 words of memory out of 5000000
- 30790 multiletter control sequences out of 15000+600000
- 548282 words of font info for 102 fonts, out of 8000000 for 9000
+ 10996 strings out of 476025
+ 163262 string characters out of 5790017
+ 1864388 words of memory out of 5000000
+ 31226 multiletter control sequences out of 15000+600000
+ 552534 words of font info for 120 fonts, out of 8000000 for 9000
  1141 hyphenation exceptions out of 8191
- 75i,17n,76p,999b,515s stack positions out of 10000i,1000n,20000p,200000b,200000s
-</usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmbx10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmex10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmmi7.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmmib10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cmextra/cmmib7.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmr7.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy7.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm7.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/urw/helvetic/uhvb8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/urw/helvetic/uhvro8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/urw/times/utmb8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/urw/times/utmr8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/urw/times/utmri8a.pfb>
-Output written on /Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.pdf (6 pages, 191822 bytes).
+ 75i,12n,76p,1018b,446s stack positions out of 10000i,1000n,20000p,200000b,200000s
+
+pdfTeX warning (dest): name{Hfootnote.3} has been referenced but does not exist, replaced by a fixed one
+
+</usr/local/texlive/2023/texmf-dist/fonts/type1/bitstrea/charter/bchb8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/bitstrea/charter/bchr8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/bitstrea/charter/bchri8a.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/cm/cmsy10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/euler/euex10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/euler/eufm10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/euler/eufm7.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/euler/eurm10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/euler/eurm5.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/euler/eurm7.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/euler/eusm10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/euler/eusm7.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/public/amsfonts/symbols/msbm10.pfb></usr/local/texlive/2023/texmf-dist/fonts/type1/urw/courier/ucrr8a.pfb>
+Output written on /Users/peter/Dropbox/gits/git-sakhmet/up/paper/.texpadtmp/up.pdf (6 pages, 114789 bytes).
 PDF statistics:
- 218 PDF objects out of 1000 (max. 8388607)
- 172 compressed objects within 2 object streams
+ 176 PDF objects out of 1000 (max. 8388607)
+ 138 compressed objects within 2 object streams
  30 named destinations out of 1000 (max. 500000)
- 137 words of extra memory for PDF output out of 10000 (max. 10000000)
+ 97 words of extra memory for PDF output out of 10000 (max. 10000000)
 
