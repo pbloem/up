@@ -134,9 +134,11 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         print(f'Finished ({toc():.4}s). Best batch size found: {model_batch_size}. Batch sizes and throughputs: {zip(batch_sizes, throughputs)}.')
 
     opt = torch.optim.Adam(lr=lr, params=model.parameters())
+
     if warmup > 0:
-        warmup = warmup / accumulate
-        sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
+        max_lr = lr
+        lrdelta = lr / warmup
+        set_lr(0.0, opt)
 
     # Load a pretrained model
     if model_file is not None:
@@ -293,9 +295,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
                     opt.zero_grad()
 
-                    if warmup > 0:
-                        sch.step()
-
                     wandb.log({
                         'gradient_norm': gn,
                     })
@@ -304,7 +303,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
                 wandb.log({
                     'loss': loss,
-                    'learning_rate': sch.get_last_lr()[0],
+                    'learning_rate': lr,
                     'sample_time': sampletime,
                     'train_time': traintime,
                     'pre-training': 1.0
@@ -323,11 +322,15 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                                                     temperature = temperature)
                     print_batch(output, ascii_only)
 
+                if lr < max_lr:
+                    lr += lrdelta
+                    set_lr(lr, opt=opt)
+
     # Fine-tuning
     print('Start finetuning')
 
-    if warmup > 0:
-        sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
+    lr = 0.0
+    set_lr(lr, opt=opt)
     # -- We keep the same optimizer (the statistics may well carry over from pre-training to finetuning)
     #    but we reset the learning rate warmup.
 
@@ -374,9 +377,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
             opt.zero_grad()
 
-            if warmup > 0:
-                sch.step()
-
             wandb.log({
                 'gradient_norm': gn,
             })
@@ -386,16 +386,22 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         scaler.step(opt)
         scaler.update()
 
-        if warmup > 0:
-              sch.step()
-
         wandb.log({
             'loss': loss,
-            'learning_rate': sch.get_last_lr()[0],
+            'learning_rate': lr,
             'pre-training': 0.0
         })
 
         bar.set_postfix({'loss': f'{loss:.02}'})
+
+        if lr < max_lr:
+            lr += lrdelta
+            set_lr(lr, opt=opt)
+
+def set_lr(lr, opt):
+    for g in opt.param_groups:
+        g['lr'] = lr
+        g['initial_lr'] = lr
 
 if __name__ == '__main__':
     fire.Fire(go)
