@@ -363,6 +363,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         with torch.cuda.amp.autocast():
             output = model(source)
             loss = F.cross_entropy(output.transpose(2, 1), target)
+            loss = loss/accumulate
 
         scaler.scale(loss).backward()
 
