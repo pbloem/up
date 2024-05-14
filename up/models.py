@@ -29,7 +29,6 @@ class TransformerBlock(nn.Module):
         self.norm2 = nn.LayerNorm(emb)
 
         self.ff = nn.Sequential(
-
             nn.Linear(emb, ff_hidden_mult * emb),
             self.nl,
             nn.Linear(ff_hidden_mult * emb, emb)
@@ -305,7 +304,7 @@ class GTransformer(nn.Module):
     """
 
     def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False,
-                 autoregressive=True, dropout=0.1):
+                 autoregressive=True, dropout=0.1, scalefactor=None):
         """
 
         :param emb:
@@ -329,7 +328,8 @@ class GTransformer(nn.Module):
         tblocks = []
         for _ in range(depth):
             tblocks.append(
-                TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl, dropout=dropout)
+                TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl,
+                                 dropout=dropout, sa_kwargs={'scalefactor':scalefactor})
             )
 
         self.tblocks = nn.ModuleList(modules=tblocks)

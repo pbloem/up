@@ -74,7 +74,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          cp_every = 100_000,       # Save a checkpoint for the model every n batches.
          dp = False,                # Use data-parallel
          wandb_project = 'up',
-         eval_at = (60_000, 120_000) # Evaluate at these points during finetuning
+         eval_at = (60_000, 120_000), # Evaluate at these points during finetuning
+         scalefactor=None
        ):
 
     """
@@ -108,7 +109,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     scaler = torch.cuda.amp.GradScaler()
 
     # Target for training
-    model = up.GTransformer(emb=emb, heads=heads, depth=mdepth, seq_length=context, num_tokens=NUM_TOKENS)
+    model = up.GTransformer(emb=emb, heads=heads, depth=mdepth, seq_length=context, num_tokens=NUM_TOKENS,
+                            scalefactor=scalefactor)
 
     if torch.cuda.is_available():
         model.cuda()
