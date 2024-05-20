@@ -12,6 +12,8 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
+from math import floor
+
 from tqdm import trange
 
 """
@@ -62,7 +64,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          reset_prob=0.01, num_batches=10_000_000, lr=3e-4, tags=[],
          debug=False, warmup=100_000, eval_every=5_000, print_every=500, gc=1.0,
          sequential=False, eval_samples=10_000, mlm_prob=0.15, ascii_only=False,
-         init_mult_max=5.0, mask_prob_max=0.7, nonlinearity='relu',
+         init_mult_max=5.0, mask_prob_max=0.7, nonlinearity='relu', dropout=0.1,
          skip_eval=False,         # Whether to skip the evaluation
          eval_ood=False,          # Whether to evaluate on OOD datasets
          name=None,               # WandB name
@@ -75,7 +77,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          dp = False,                # Use data-parallel
          wandb_project = 'up',
          eval_at = (60_000, 120_000), # Evaluate at these points during finetuning
-         scalefactor=None
+         scalefactor=None,
+         acc_warmup=-1
        ):
 
     """
@@ -110,7 +113,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
     # Target for training
     model = up.GTransformer(emb=emb, heads=heads, depth=mdepth, seq_length=context, num_tokens=NUM_TOKENS,
-                            scalefactor=scalefactor)
+                            scalefactor=scalefactor, dropout=dropout)
 
     if torch.cuda.is_available():
         model.cuda()
@@ -141,6 +144,11 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         max_lr = lr
         lrdelta = lr / warmup
         set_lr(0.0, opt)
+
+    if acc_warmup > 0:
+        max_acc = accumulate
+        accdelta = accumulate / acc_warmup
+        accumulate = 1.0
 
     # Load a pretrained model
     if model_file is not None:
@@ -365,15 +373,17 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         with torch.cuda.amp.autocast():
             output = model(source)
             loss = F.cross_entropy(output.transpose(2, 1), target)
-            loss = loss/accumulate
 
         scaler.scale(loss).backward()
 
-        if i % accumulate == 0:  # perform a step
+        if i % int(floor(accumulate)) == 0:  # perform a step
 
             gn = gradient_norm(model)
             if gc > 0.0:
                 nn.utils.clip_grad_norm_(model.parameters(), gc)
+
+            for parm in model.parameters():
+                parm.grad *= 1.0 / floor(accumulate)
 
             scaler.step(opt)
             scaler.update()
@@ -392,6 +402,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         wandb.log({
             'loss': loss,
             'learning_rate': lr,
+            'acc': accumulate,
             'pre-training': 0.0
         })
 
@@ -401,10 +412,17 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
             lr += lrdelta
             set_lr(lr, opt=opt)
 
+        if accumulate < max_acc:
+            accumulate += accdelta
+
 def set_lr(lr, opt):
     for g in opt.param_groups:
         g['lr'] = lr
         g['initial_lr'] = lr
+
+def grad_scale(model, scale):
+    for parm in model.parameters():
+        parm.grad *= scale
 
 if __name__ == '__main__':
     fire.Fire(go)

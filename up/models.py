@@ -15,7 +15,7 @@ class TransformerBlock(nn.Module):
     A straightforward transformer block.
     """
 
-    def __init__(self, emb, heads, mask, seq_length, ff_hidden_mult=4, dropout=0.0,
+    def __init__(self, emb, heads, mask, seq_length, ff_hidden_mult=4, dropout=0.1,
                  pos_embedding=None, sa_kwargs={}, nl=torch.relu):
         super().__init__()
 
