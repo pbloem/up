@@ -625,5 +625,27 @@ def nl(name : str):
 
     raise Exception(f'Nonlinearity {name} not recognized.')
 
+def em_meanvar(x, mean=0, variance=0, alpha=0.5):
+    """
+    Computes exp. moving average and variance.
+
+    ```
+    mean, variance = 0, 0
+    for x in values:
+       mean, variance = em_meanvar(x, mean, variance, alpha=0.5)
+    ```
+
+    source: Incremental calculation of weighted mean and variance (Tony Finch, 2009)
+    """
+    diff = x - mean
+    incr = alpha * diff
+
+    newmean = mean + incr
+    newvar = (1 - alpha) * (variance + diff * incr)
+    if not (np.isfinite(newmean) and np.isfinite(newvar)):
+        # skip x if it causes infs or nans
+        return mean, variance
+
+    return newmean, newvar
 
 

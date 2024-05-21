@@ -12,7 +12,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-from math import floor
+from math import floor, sqrt
 
 from tqdm import trange
 
@@ -345,6 +345,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     #    but we reset the learning rate warmup.
 
     traindata = torch.tensor(up.data.load_data('wp-train'), device='cpu')
+    gnm, gnv = 0, 0
 
     for i in (bar := trange(num_batches)):
         if (eval_every > 0 and i % eval_every == 0 and not skip_eval) or (i in eval_at):
@@ -378,10 +379,15 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
         if i % int(floor(accumulate)) == 0:  # perform a step
 
+            # Adaptive gradient clipping. We keep an exponential moving estimate of the mean and variance of the gradient
+            # norm, and if the current norm is more than `cfg.up.gc` standard deviations above the mean, we clip it to
+            # that value.
             gn = gradient_norm(model)
-            if gc > 0.0:
-                nn.utils.clip_grad_norm_(model.parameters(), gc)
+            lim = gnm + sqrt(gnv) * gc
+            if i > 100 and gn > lim:
+                nn.utils.clip_grad_norm_(model.parameters(), lim)
 
+            gnm, gnv = up.util.em_meanvar(gn, gnm, gnv)
             for parm in model.parameters():
                 parm.grad *= 1.0 / floor(accumulate)
 
@@ -400,7 +406,10 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
             'loss': loss,
             'learning_rate': lr,
             'acc': accumulate,
-            'pre-training': 0.0
+            'pre-training': 0.0,
+            'ema_gn': gnm,
+            'em_std_gn': sqrt(gnv),
+            'clip': 1.0 if (gn > lim) and (i > 100) else 0.0
         })
 
         bar.set_postfix({'loss': f'{loss:.02}'})
