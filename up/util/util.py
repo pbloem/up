@@ -11,6 +11,8 @@ from tqdm import trange
 
 import warnings
 
+import numpy as np
+
 tics = []
 
 def tic():
