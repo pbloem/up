@@ -222,7 +222,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     tic()
                     with torch.no_grad():
                         # Re-initialize the parameters of source (i.e. sample a random source)
-                        up.weights_init(cmp_source, init_mult_max=init_mult_max, mask_prob_max=mask_prob_max)
+                        up.weights_init_minimal(cmp_source, init_mult_max=init_mult_max)
 
                         # slice a random selection of rows from the buffer (without replacement)
                         iz = random.sample(range(buffer.size(0)), sample_batch_size)
