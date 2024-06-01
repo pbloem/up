@@ -148,7 +148,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     if acc_warmup > 0:
         max_acc = accumulate
         accdelta = accumulate / acc_warmup
-        accumulate = 1.0
+        accumulate_current = 1.0
 
     # Load a pretrained model
     if model_file is not None:
@@ -188,6 +188,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         if pre_batches > 0:
 
             print('Start pre-training')
+            gnm, gnv = 0, 0  # moving avg and std of the gradient norm
 
             for i in (bar := trange(pre_batches)):
 
@@ -294,11 +295,16 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
                 scaler.scale(loss).backward()
 
-                if i % accumulate == 0: # perform a step
+                if i % int(floor(accumulate_current)) == 0: # perform a step
 
                     gn = gradient_norm(model)
-                    if gc > 0.0:
-                        nn.utils.clip_grad_norm_(model.parameters(), gc)
+                    lim = gnm + sqrt(gnv) * gc
+                    if i > 100 and gn > lim:
+                        nn.utils.clip_grad_norm_(model.parameters(), lim)
+
+                    gnm, gnv = up.util.em_meanvar(gn, gnm, gnv)
+                    for parm in model.parameters():
+                        parm.grad *= 1.0 / floor(accumulate_current)
 
                     scaler.step(opt)
                     scaler.update()
@@ -316,7 +322,11 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     'learning_rate': lr,
                     'sample_time': sampletime,
                     'train_time': traintime,
-                    'pre-training': 1.0
+                    'pre-training': 1.0,
+                    'acc': accumulate_current,
+                    'ema_gn': gnm,
+                    'em_std_gn': sqrt(gnv),
+                    'clip': 1.0 if (gn > lim) and (i > 100) else 0.0
                 })
                 bar.set_postfix({'loss': f'{loss:.02}'})
 
@@ -336,16 +346,24 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     lr += lrdelta
                     set_lr(lr, opt=opt)
 
+                if accumulate_current < max_acc:
+                    accumulate_current += accdelta
+
     # Fine-tuning
     print('Start finetuning')
 
-    lr = 0.0
-    set_lr(lr, opt=opt)
+
+    if warmup > 0:
+        set_lr(0.0, opt)
+
     # -- We keep the same optimizer (the statistics may well carry over from pre-training to finetuning)
     #    but we reset the learning rate warmup.
 
+    if acc_warmup > 0:
+        accumulate_current = 1.0
+
     traindata = torch.tensor(up.data.load_data('wp-train'), device='cpu')
-    gnm, gnv = 0, 0
+    gnm, gnv = 0, 0 # moving avg and std of the gradient norm
 
     for i in (bar := trange(num_batches)):
         if (eval_every > 0 and i % eval_every == 0 and not skip_eval) or (i in eval_at):
@@ -377,7 +395,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
         scaler.scale(loss).backward()
 
-        if i % int(floor(accumulate)) == 0:  # perform a step
+        if i % int(floor(accumulate_current)) == 0:  # perform a step
 
             # Adaptive gradient clipping. We keep an exponential moving estimate of the mean and variance of the gradient
             # norm, and if the current norm is more than `cfg.up.gc` standard deviations above the mean, we clip it to
@@ -389,7 +407,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
             gnm, gnv = up.util.em_meanvar(gn, gnm, gnv)
             for parm in model.parameters():
-                parm.grad *= 1.0 / floor(accumulate)
+                parm.grad *= 1.0 / floor(accumulate_current)
 
             scaler.step(opt)
             scaler.update()
@@ -405,7 +423,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         wandb.log({
             'loss': loss,
             'learning_rate': lr,
-            'acc': accumulate,
+            'acc': accumulate_current,
             'pre-training': 0.0,
             'ema_gn': gnm,
             'em_std_gn': sqrt(gnv),
@@ -418,8 +436,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
             lr += lrdelta
             set_lr(lr, opt=opt)
 
-        if accumulate < max_acc:
-            accumulate += accdelta
+        if accumulate_current < max_acc:
+            accumulate_current += accdelta
 
 def set_lr(lr, opt):
     for g in opt.param_groups:
