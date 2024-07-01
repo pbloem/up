@@ -68,7 +68,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          eval_batch_mult=2.0,     # How much bigger the eval batches can be than the training batches
          pre_file=None,           # File containing pre-training data
          accumulate = 1,          # The number of batches to accumulate the gradient over before a gradient step occurs
-         model_file = None,            # Filename of a pretrained model/optimizer
+         model_file = None,                # Filename of a pretrained model/optimizer
          model_dst = './pretrained-{}.pt', # Where to save the pretrained model Add in an {} for the number of instances
          cp_every = 100_000,       # Save a checkpoint for the model every n batches.
          dp = False                # Use data-parallel
@@ -82,7 +82,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
     wd = wandb.init(
         name=name,
-        project='prior2',
+        project='up',
         tags=tags,
         config=locals(),
         mode= 'disabled' if debug else 'online'
