@@ -19,11 +19,11 @@ def go(
         n=1000,                   # number of samples to take (points in the scatterplot
         batch_size=40,            #
         batches_per_source=1,    # how many batches to try for each sampled source model
-        wmr=(1e5, 1e7),           # range of weight multiplier (samples are taken uniformly between these two)
+        wmr=(1e1, 1e5),           # range of weight multiplier (samples are taken (log) uniformly between these two)
         logspace=False,
         emb=768,
         heads=8,
-        cdepth=8,
+        cdepth=3,
         its=1,                    # How often to feed the model's output back to itself.
         context=128,
         num_tokens=512,
