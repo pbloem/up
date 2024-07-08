@@ -275,7 +275,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
                 with torch.cuda.amp.autocast():
                     output = model(input)
-                    loss = F.cross_entropy(output.transpose(2, 1), target)
+                    loss = F.cross_entropy(output.transpose(2, 1), target) / accumulate
 
                 scaler.scale(loss).backward()
 
@@ -295,14 +295,14 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                 traintime = toc()
 
                 wandb.log({
-                    'loss': loss,
+                    'loss': loss.item(),
                     'learning_rate': sch.get_last_lr()[0],
                     'gradient_norm': gn,
                     'sample_time': sampletime,
                     'train_time': traintime,
                     'pre-training': 1.0
                 })
-                bar.set_postfix({'loss': f'{loss:.02}'})
+                bar.set_postfix({'loss': f'{loss.item():.02}'})
 
                 if i % print_every == 0:
 
