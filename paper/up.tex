@@ -47,69 +47,79 @@ Amsterdam, Netherlands \\
 \maketitle
 
 \begin{abstract}
-We investigate the use of randomly generated data for the sake of pre-training a model, before seeing any domain-specific data. We justify this approach theoretically from the perspective of Kolmogorov complexity. We show empirically, in the domain of token sequences, that randomly generated data can be used to pre-train a model a-priori---before the data is seen---and that this approach has several benefits. First, it leads to better-than-chance zero-shot performance. That is, the model shows some in-context test-set performance before seeing \emph{any} training data. Second, when the model is fine-tuned on training data after pretraining, it converges faster and to better performance, even when the pretraining is accounted for in the computational budget. And third, The resulting model shows better generalization both in-domain and out-of-domain. While these experiments are only small-scale, we perform a scaling experiment that shows a promising trend towards larger models.
+We investigate the use of randomly generated data for the sake of pre-training a model, \emph{before} seeing any domain-specific data. We justify this approach theoretically from the perspective of Kolmogorov complexity. We show empirically, in the domain of token sequences, that randomly generated data can be used to pre-train a model a-priori---before the data is seen---and that this leads to a certain amount of absolute, zero-shot in-context learning. That is, for simple tasks, the resulting model is able to learn in-context without seeing any training data. We call this approach \emph{universal pre-training} and we invistigate several potential benefits. First, it leads to better-than-chance zero-shot performance. That is, the model shows some in-context test-set performance before seeing \emph{any} training data. Second, when the model is fine-tuned on training data after pretraining, it converges faster and to better performance, even when the pretraining is accounted for in the computational budget. And third, The resulting model shows better generalization both in-domain and out-of-domain. While these experiments are only small-scale, we perform a scaling experiment that shows a promising trend towards larger models.
 \end{abstract}
 
 \section{Introduction}
 
-Even in the domain of natural language, machine learning is fast approaching the point where the amount of data on which we would like to train a model is larger than the amount of data available \cite{}. In many other domains, this point has long been passed. At the same time, as artificial intelligence becomes more and more integrated in production systems, the authors of, for instance, literature and art, are less eager for their work to end up in training datasets. In short the question of whether we can do more with less data is increasingly urgent.
+Even in the domain of natural language, where vast amounts of data are available, machine learning is fast approaching the point where the amount of data on which we would like to train a model is larger than the total amount data available \cite{}. In many other domains, this point has long been passed. At the same time, as artificial intelligence becomes more and more integrated in production systems, producers of, for instance, literature and art, are less eager for their work to end up in training datasets. In short the question of whether we can do more with less data is increasingly urgent.
 
 One approach is to generate \emph{synthetic data}. This may seem at first to be a false economy: how can we learn something from a data generator that we built ourselves? In information theoretic terms, the data processing inequality (DPI) \cite{} tells us that we cannot increase the information content of a signal by applying computation to it. This seems to preclude the possibility of enriching our models with data from any other source than the real world.
 
-However, the key to valuable data is not information content, it's \emph{structure}. The most information-rich signal, a fully random one, is among the least valuable data to learn from. An interesting source of data provides a mix of randomness and structure.
+However, the key to valuable data is not information content, it's \emph{structure}. The most information-rich signal, a fully random one, is among the least valuable data to learn from. A valuable source of data provides a mix of randomness and structure.
 
-Consider the following analogy (from \cite{}). A monkey behind a typewriter, bashing keys at random, will famously produce the complete works of Shakespeare in a large, but finite amount of time. A monkey behind a \emph{computer} will also produce the collected works of Shakespeare, and o so more quickly. This is because there is structure in natural language that may be exploited by a computer program. The second monkey only needs to be lucky enough to type out the computer program, whereas the first monkey needs to be lucky enough to get every single character correct.
+Consider the following analogy (from \cite{}). A monkey behind a typewriter, bashing keys at random, will famously produce the complete works of Shakespeare in a large, but finite amount of time. A monkey behind a \emph{computer} will also produce the collected works of Shakespeare, and \emph{it will do so more quickly}. This is because there is structure in natural language that may be exploited by a computer program. The second monkey only needs to be lucky enough to type out a computer program that produces the collected works of Shakespeare, whereas the first monkey needs to be lucky enough to get every single character correct.
 
-The key takeaway is that by taking a source of randomness, a monkey or a random number generator, and passing its output through a computer, we can \emph{enrich} data (from the perspective of machine learning). This may well reduce the amount if information in the data (in the Shannon/Kolmogorov sense of the word), but it adds structure. Structure that a machine learning model can learn, and that may transfer to real-world tasks.
+The key takeaway is that by taking a source of randomness---whether a monkey or a random number generator---and passing its output through a computer, we can \emph{enrich} data (from the perspective of machine learning). This may well reduce the amount if information in the data (in the Shannon/Kolmogorov sense of the word), but it adds structure. Structure that a machine learning model can learn, and that may transfer to real-world tasks.
 
-With this principle in mind, we ask the following question. Can we pre-train a model before seeing the data? Can we generate random data, before knowing what our task is, such that pre-training on this random data benefits learning? We show that this is indeed possible, and we call the resulting approach \emph{universal pre-training}. We provide some theoretical foundation for this principle, from the field of Kolmogorov complexity.
+With this principle in mind, we ask the following question. Can we pre-train a model before seeing the data? Can we generate rich random data, before knowing what our task is, such that pre-training on this random data benefits learning, regardless of the task? We show that this is indeed possible, and we call the resulting approach \emph{universal pre-training}. We provide some theoretical foundation for this principle, from the field of Kolmogorov complexity.
 
-Figure~\ref{fig:example} shows a simple example of our approach: a string of ASCII characters chosen uniformly at random, and the result of passing that string through a randomly initialized transformer model. The first string is fully random, and nothing useful may be learned from it. The second string contains structure: certain characters and structures re-occur in a predictable way. We can make sensible predictions about one part of the string by studying another. 
+Figure~\ref{fig:example} shows a simple example of our approach: a string of ASCII characters, each chosen uniformly at random, and the result of passing that string through a randomly initialized transformer model. The first string is fully random, and nothing useful may be learned from it. The second string contains structure: certain characters and structures re-occur in a predictable way. We can make sensible predictions about one part of the string by studying another part of the string. 
 
-Some of these basic patterns may transfer to other domains. For instance, the relatiuve frequency of a character at the start of the string, is more likely than not be a reasonable prediction of its probability at the end of the string. Other patterns, such as the specific characters that are frequent, are entirely specific to this sample, and will disappear if we re-initialize the network, and pass another random string through. 
+Some of these basic patterns may transfer to other domains. For instance, the relative frequency of a character at the start of the string, is more likely than not be a reasonable prediction of its probability at the end of the string, at least in natural language strings. Other patterns, such as the specific characters that are frequent, are entirely specific to this sample, and will disappear if we sample a second string in the same way. 
 
-Our results show that we can trade off compute for data. By pre-training on entirely synthetic data, sampled in this manner---by passing fully random data through a computational process---we end up with a model that is better initialized once it starts seeing the real-world data. We show that a model prepared with universal pretraining reaches better performance than a model that has been initialized traditionally. We also show better out-of distribution performance, and better generalization.
+Ultimately, if universal pre-training works well, patterns that are likely to be \emph{universal}---that is, shared by many datasets generated by computational sources---will be learned by the model, whereas patterns that are specific only to very specific sources of random data will quickly be averaged out. 
+
+Our contributions are threefold:
+\begin{itemize}
+\item We provide a theoretical framework to show that, under certain assumptions, universal pre-training may be used to invest compute to improve model performance before seeing the data. That is, to trade off compute for data. 
+\item We introduce a simple algorithm for generating approximately iid. structured data by passing random data through a randomly initialized model. We use a buffering approach to allow for batched computation, while still generating approximately iid samples.
+\item We show that pre-training a model on data generated in this way, leads to better than chance zero-shot in-context learning performance on various toy and real-world tasks. 
+\end{itemize}
+
+While these results are preliminary, and far from producing as meaningful benefit for modern machine learning production. However, we establish a scaling effect that suggests that as we scale up compute, the effect of universal pre-training increases proportionally. This suggests that at the scale that modern machine learning models are trained, there may be a substantial benefit.
+
+In the conclusion, we suggest a series of key research directions that should be pursued to establish whether universal pre-training may become a viable approach at scale, in the future.
 
 \section{Preliminaries}
 
 We will briefly review the required preliminaries. See \cite{} for a more detailed treatment. These are mostly required to understand the theoretical framework we use to show that universal pre-training is feasible. To understand the experimental part of the paper, the intuitive explanation in the introduction should suffice.
 
-Let $\B$ be the set of finite binary strings. We will use Turing machines to model computable probability distributions on $\B$. To this end we, fix Turing machines with a single input tape and a separate output tape. The read-head on the input tape is only allowed to move one way: the effect is that after reading a bit from the input tape, the machine either halts, reads the next bit, or computes infitenly without doing either. This means that the set of inputs on which a machine halts forms a prefix-free set: no halting input is the prefix of another halting input. 
+Let $\B$ be the set of finite binary strings $\{0, 1, 00, 01, 10, 11, 000, \ldots\}$. We will use Turing machines \cite{} to model computable probability distributions on $\B$. To this end we, fix Turing machines with a single input tape and a separate output tape. The read-head on the input tape is only allowed to move from left to right: the effect of this constraint is that after reading a bit from the input tape, the machine either halts, reads the next bit, or computes infitenly without doing either. This means that the set of inputs on which a machine halts forms a prefix-free set: no halting input is the prefix of another halting input.  This is called a prefix-free Turing machine \cite{}.
 
-If a machine $T$ halts, we take the input bits it has read as its input $x$, and the value on its output tape when it halts as its output $y$, writing $T(x) = y$. We write $T(x)=\infty$ for an input on which the machine does not halt.
+If a machine $T$ halts, we take the input bits it has read as its input $x$, and the value on its output tape when it halts as its output $y$, writing $T(x) = y$. We write $T(x)=\infty$ for an input on which the machine does not halt (that is, it processes indefinitely without advancing the read head).
 
-We can now use such machines to simulate probability distributions, but feeding it random bits. We start the machine, and whenever it reads from the input tape, we sample a random bit and provide it. If the machine halts, we take the output as our sample.\footnotemark
+We can now use such machines to simulate probability distributions, by feeding them random bits. We start the machine, and whenever it reads from the input tape, we sample a random bit and provide it. If the machine halts, we take the output as our sample.\footnotemark
 
-\footnotetext{Since the machine may not halt, this is a deficient distribution on $\B$. However, we will mostly deal with subsets of the Turing machines that always halt. If we place no restrictions on the Turing machines used, we have defined the class of \emph{lower semicomputable semimeasures}. We will refer to these as the computable distributions for the sake of simplicity.}
+\footnotetext{Since the machine may not halt, this is a deficient distribution on $\B$. However, we will mostly deal with subsets of the Turing machines that always halt. If we place no restrictions on the Turing machines used, we have defined the class of \emph{lower semicomputable semimeasures} \cite{}. We will refer to these as the computable distributions for the sake of simplicity.}
 
-We assume that we are given some enumeration $T_i$ of all Turing machines. We refer to the probability of sampling $y$ from $T_i$ as $p_i(y)$. Since each input $x$ is samples with exactly probability $2^{|x|}$, where $|\cdot|$ denotes string lengths, we can write $p_i$ as
+We assume that we are given some enumeration $T_i$ of all Turing machines, with $i\in 0, 1, 2, \ldots$. We refer to the probability of sampling $y$ from $T_i$ as $p_i(y)$. Since each input $x$ is sampled with exactly probability $2^{|x|}$, where $|\cdot|$ denotes string length, we can write $p_i$ as
 
 $$
 p_i(y) = \sum_{x : T_i(x) = y} 2^{|x|} \p  
 $$
 
-Next, assume a pairing function $(i, x)$ that encodes $i$ and $x$ into a single string in $\B$, then we can define a universal Turing machine $U((i, x)) = T_i(x)$, which unpacks the pairing function and then simulates the running of the $i$-th Turing machine on input $x$. If the pairing function uses prefix-free codewords, which is easy to achieve, then $U$ itself  occurs somewhere in the enumeration $T_i$. \footnotemark
+Next, assume a pairing function $(i, x)$ that encodes $i$ and $x$ into a single string in $\B$, then we can define a universal Turing machine $U((i, x)) = T_i(x)$, which unpacks the string $(i, x)$ function and then simulates the running of the $i$-th Turing machine on input $x$. If the pairing function uses prefix-free codewords, which is easy to achieve, then $U$ is itself a prefix-free Turing machine, which means that  occurs somewhere in the enumeration $T_i$. \footnotemark
 
-\footnotetext{A simple way to achieve this is to define a prefix-free encoding of $\B$, written as $\bar x$. We can then use the pairing function $(i, x) = \bar i\bar x$, since concatenating two prefix-free codewords results in another prefix-free code.}
+\footnotetext{A simple way to achieve a prefix-free pairing function is to define a prefix-free encoding of $\B$, written as $\bar x$. We can then use the pairing function $(i, x) = \bar \imath\bar x$, since concatenating two prefix-free codewords results in another prefix-free code.}
 
-With this, we can sample from $U$. This effectively samples a Turing machine $i$ according to some prior probability $p(i)$, and then samples an output $y$ according to  $p_i(y)$. We call this the \emph{universal distribution} $m(y)$. The universal distribution is a Bayesian mixture over the class of computable distributions.
-
+With this, we can sample from $U$, feeding it random bits until it halts. This effectively samples a Turing machine $i$ according to some prior probability $p(i)$, and then samples an output $y$ according to  $p_i(y)$. We call this the \emph{universal distribution} $m(y)$. The universal distribution is a Bayesian mixture over the class of computable distributions.
 
 \section{Related work}
 
 \subsection{Synthetic data}
 
-Training on synthetic data goes back to the simple principles of data augmentation. \cite{} In recent years, much research has been devoted to the use of simulators generating synthetic data to encode very specific domain assumptions. For instance, in training self-driving cars, robotics control, tabular data, ...
+Training on synthetic data goes back to the simple principles of data augmentation \cite{}. In recent years, much research has been devoted to the use of simulators generating synthetic data to encode very specific domain assumptions. For instance, in training self-driving cars, robotics control, tabular data, ... \cite{}.
 
-Our work with this trend, but with the change that we aim to make the assumptions on the domain \emph{minimal}. In its most general form, universal pre-training only assumes that the source of the downstream dataset is \emph{computational} in nature. This allows one form of pre-training to be used for a wide variety of downstream tasks.
+Our work follows this trend, but with the change that we aim to make the assumptions on the domain \emph{minimal}. In its most general form, universal pre-training only assumes that the source of the downstream dataset is \emph{computational} in nature. This allows one form of pre-training to be used for a wide variety of downstream tasks.
 
 \subsection{The No-Free Lunch Theorem}
 
-The idea of pre-training a model irrespective of its task seems to fly in the face of the no-free-lunch theorem \cite{}, which states that, averaged over all tasks, all models perform the same. This suggests that if our pre-training makes any change at all to the model's performance on a subset of tasks, it must reduce its performance on other tasks.
+The idea of pre-training a model irrespective of its task seems to fly in the face of the no-free-lunch (NFL) theorem \cite{}, which states that, averaged over all tasks, all models perform the same. This suggests that if our pre-training makes any change at all to the model's performance on a subset of tasks, it must reduce its performance on other tasks.
 
-This is the case, but it's possible to get out of the NFL theorem with a very broad, almost universal assumption about our data: that the process |$p$ that generated it is computational. That is, it can be simulated by a probabilistic Turing machine. Under this assumption, the source of our data is \emph{dominated} by the universal distribution $m$, and by any class-universal distribution $m_C$ for which $p \in C$. 
+This is indeed true, but it's possible to get out of the NFL theorem with a very broad, almost universal assumption about our data: that the process $p$ that generated it is \emph{computational}. That is, it can be simulated by a probabilistic Turing machine. Under this assumption, the source of our data is \emph{dominated} by the universal distribution $m$, and by any class-universal distribution $m_C$ for which $p \in C$. 
 
-This means that there are computable probability distributions $m_CC$ that fit our data as well as its source $p$ does (up to a multiplicative constant). Moreover, this holds for all $p \in C$. Therefore, $m_C$ provides a universal predictor for $C$. This does not violate the NFL theorem, because we do make an assumption about the data, namely that it comes from a source in $C$. However, $C$ can be made \emph{very} broad, for instance the class of all polynomial-time Turing machines, while still allowing practical sampling.
+This means that there are computable probability distributions $m_C$ that fit our data as well as its source $p$ does (up to a multiplicative constant). Moreover, this holds for all $p \in C$. Therefore, $m_C$ provides a universal predictor for $C$. This does not violate the NFL theorem, because we do make an assumption about the data, namely that it comes from a source in $C$. However, $C$ can be made \emph{very} broad, for instance the class of all polynomial-time Turing machines, while still allowing practical sampling.
 
 By training on samples from $m_C$, we are essentially approximating it in our pre-trained model.\footnotemark
 
@@ -140,23 +150,21 @@ First, instead of training on sequences of bits, we take our token alphabet from
 
 For ease of implementation we limit ourselves to sequences of a fixed length. This makes memory use predictable. Our class of source models $C$ is a model class of single-stack transformers with causal self-attention. The architecture is detailed in the appendix. We sample from $C$ simply by initializing its parts using the standard algorithm for the part (also detailed in the appendix), and then scaling all parameters by a fixed constant afterwards. 
 
-For efficiency and ease of implementation, we initialize a single model $f_i$, and sample a batch of $n$ instances from it. This means that the batch is \emph{not} independently samples from $m_C$. Training directly on such batches would create a bias at each gradient update for the patterns that are specific to $i$. 
+For efficiency and ease of implementation, we initialize a single model $f_i$, and sample a batch of $n$ instances from it. This means that the batch is \emph{not} independently sampled from $m_C$. Training directly on such batches would create a bias at each gradient update for the patterns that are specific to $i$. 
 
 To approximate independent sampling, we instead keep a buffer of $k$ samples. Each iteration, we take $n$ instances $x$ from the buffer and replace them by $f_i(x)$. We then sample $n$ random instances again for our target model to train on. We also replace a small proportion $\alpha$ of instances in the buffer with (pseudo-)random noise, to stop the amount of entropy becoming to low.
 
-While this does not fully ensure that the samples are independent, it ensures that that patterns from different models $i$ appear in the data. 
+While this does not fully ensure that the samples are independent, it does ensure that with high probability, each instance in a training batch was generated from a different model $i$.
 
 Moreover, because we are sampling structured noise, and feeding it back into the data, Theorem~\ref{} tells us that we are approximating a sample from a mixture over the infinite sequence of models $m^1_C, m^2_C\ldots$, while only passing one batch of instances through one model from $C$ (the cost of a direct sample from $m^1_C$).\footnotemark
-\footnotetext{The probability of a sample coming from $m^n_C$ decays exponentially with $n$, so this claim should be taken with a pinch of salt.}
+\footnotetext{The probability of a sample coming from $m^n_C$ decays exponentially with $n$, so this claim should be taken with a pinch of salt. However, the ablation in section \ref{} shows that this resampling from the buffer does have a beneficial effect. }
 
 The complete algorithm is detailed in Algorithm~\ref{}.
 
-On these samples, we train a standard autoregressive transformer (architecture and training details in the appendix) by shifting the sequences one one character to the left to form the target value.
-
+On these samples, we train a standard autoregressive transformer (architecture and training details in the appendix) by shifting the sequences one character to the left to form the target value, so that the model is trained to predict the next character at each position.
 
 \section{Experiments}
-
-
+__
 First, we sample sequences not consisting of bits but of a character set or 128 or 256 characters.\footnotemark 
 
 \footnotetext{We use 7 bits ASCII characters for experiments where we print the sampled strings, and 8 bits extended ASCII character}
