@@ -104,10 +104,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
             'wp'   : torch.tensor(load_data('wp-val'), dtype=torch.long)
         }
 
-    if mult_lr:
-        print(f'Scaling learning rate from {lr} to {lr * accumulate}.')
-        lr = lr * accumulate
-
     scaler = torch.cuda.amp.GradScaler()
 
     # Target for training
@@ -137,9 +133,19 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         print(f'Finished ({toc():.4}s). Best batch size found: {model_batch_size}. Batch sizes and throughputs: {zip(batch_sizes, throughputs)}.')
 
     opt = torch.optim.Adam(lr=lr, params=model.parameters())
+
+
     if warmup > 0:
-        warmup = warmup / accumulate
-        sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
+        # warmup = warmup / accumulate
+        # sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
+
+        maxlr = lr
+        lr = 0.0
+        lrdelta = maxlr / warmup
+
+    else:
+        if mult_lr:
+            lr = lr * accumulate
 
     # Load a pretrained model
     if model_file is not None:
@@ -180,6 +186,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
             print('Start pre-training')
 
+            accumulated = 0
             if acc_warmup > 0:
                 accraw = 1.0
                 accdelta = (accumulate - 1) / acc_warmup
@@ -292,9 +299,10 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     loss = rloss / accumulate # scale the loss to compensate for the accumulation
 
                 scaler.scale(loss).backward()
+                accumulated += 1
 
-
-                if i % min(int(round(accraw)), accumulate) == 0: # perform a step
+                acc_current = min(int(round(accraw)), accumulate)
+                if i % acc_current == 0: # perform a step
                     gn = gradient_norm(model)
 
                     if gc > 0.0:
@@ -302,30 +310,34 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
                     wandb.log({
                         'gradient_norm': gn,
+                        'accumulated': accumulated # Sanity check.
                     })
 
                     scaler.step(opt)
                     scaler.update()
 
                     opt.zero_grad()
-
-                    if warmup > 0:
-                        sch.step()
+                    accumulated = 0
 
                 traintime = toc()
 
                 wandb.log({
                     'loss': rloss.item(),
-                    'learning_rate': sch.get_last_lr()[0],
+                    'learning_rate': lr,
                     'sample_time': sampletime,
                     'train_time': traintime,
                     'pre-training': 1.0,
-                    'accumulate': accraw
+                    'accumulate': acc_current
                 })
                 bar.set_postfix({'loss': f'{rloss.item():.02}'})
 
                 if accraw < accumulate:
                     accraw += accdelta * batch.size(0)
+
+                if warmup > 0:
+                    lr += lrdelta * batch.size(0)
+
+                    set_lr(lr * acc_current if mult_lr else lr, opt)
 
                 if i % print_every == 0:
 
@@ -399,6 +411,12 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         })
 
         bar.set_postfix({'loss': f'{loss:.02}'})
+
+def set_lr(lr, opt):
+    for g in opt.param_groups:
+        g['lr'] = lr
+        g['initial_lr'] = lr
+
 
 if __name__ == '__main__':
     fire.Fire(go)
