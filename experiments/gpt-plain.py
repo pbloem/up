@@ -71,7 +71,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          model_file = None,                # Filename of a pretrained model/optimizer
          model_dst = './pretrained-{}.pt', # Where to save the pretrained model Add in an {} for the number of instances
          cp_every = 100_000,       # Save a checkpoint for the model every n batches.
-         dp = False                # Use data-parallel
+         dp = False,               # Use data-parallel
+         mult_lr = True            # Multiply the base learning rate by the accumulation
        ):
 
     """
@@ -101,6 +102,10 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         datasets = {
             'wp'   : torch.tensor(load_data('wp-val'), dtype=torch.long)
         }
+
+    if mult_lr:
+        print(f'Scaling learning rate from {lr} to {lr * accumulate}.')
+        lr = lr * accumulate
 
     scaler = torch.cuda.amp.GradScaler()
 
@@ -280,11 +285,16 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
                 scaler.scale(loss).backward()
 
-                gn = gradient_norm(model)
-                if gc > 0.0:
-                    nn.utils.clip_grad_norm_(model.parameters(), gc)
 
                 if i % accumulate == 0: # perform a step
+                    gn = gradient_norm(model)
+                    if gc > 0.0:
+                        nn.utils.clip_grad_norm_(model.parameters(), gc)
+
+                    wandb.log({
+                        'gradient_norm': gn,
+                    })
+
                     scaler.step(opt)
                     scaler.update()
 
@@ -298,7 +308,6 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                 wandb.log({
                     'loss': rloss.item(),
                     'learning_rate': sch.get_last_lr()[0],
-                    'gradient_norm': gn,
                     'sample_time': sampletime,
                     'train_time': traintime,
                     'pre-training': 1.0
