@@ -180,8 +180,12 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
             print('Start pre-training')
 
-            accraw = 1.0
-            accdelta = (accumulate - 1) / acc_warmup
+            if acc_warmup > 0:
+                accraw = 1.0
+                accdelta = (accumulate - 1) / acc_warmup
+            else:
+                accraw = accumulate
+                accdelta = 0.0
 
             for i in (bar := trange(pre_batches)):
 
