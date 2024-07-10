@@ -5,7 +5,7 @@ from up.data import load_data, cas
 from former.util import d, here, tic, toc, sample_batch, enwik8_string, enwik8_bytes, estimate_compression
 import former
 
-import wandb, random, fire, gzip
+import wandb, random, fire, gzip, math
 
 import torch
 from torch import nn
@@ -72,7 +72,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          model_dst = './pretrained-{}.pt', # Where to save the pretrained model Add in an {} for the number of instances
          cp_every = 100_000,       # Save a checkpoint for the model every n batches.
          dp = False,               # Use data-parallel
-         mult_lr = True            # Multiply the base learning rate by the accumulation
+         mult_lr = True,           # Multiply the base learning rate by the accumulation
+         acc_warmup = 0            # Accumulation warmup (in instances)
        ):
 
     """
@@ -178,6 +179,9 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         if pre_batches > 0:
 
             print('Start pre-training')
+
+            accraw = 1.0
+            accdelta = (accumulate - 1) / acc_warmup
 
             for i in (bar := trange(pre_batches)):
 
@@ -286,8 +290,9 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                 scaler.scale(loss).backward()
 
 
-                if i % accumulate == 0: # perform a step
+                if i % min(int(math.round(accraw)), accumulate) == 0: # perform a step
                     gn = gradient_norm(model)
+
                     if gc > 0.0:
                         nn.utils.clip_grad_norm_(model.parameters(), gc)
 
@@ -310,9 +315,13 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     'learning_rate': sch.get_last_lr()[0],
                     'sample_time': sampletime,
                     'train_time': traintime,
-                    'pre-training': 1.0
+                    'pre-training': 1.0,
+                    'accumulate': accraw
                 })
                 bar.set_postfix({'loss': f'{rloss.item():.02}'})
+
+                if accraw < accumulate:
+                    accraw += accdelta * batch.size(0)
 
                 if i % print_every == 0:
 
