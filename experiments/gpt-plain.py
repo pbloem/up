@@ -330,11 +330,11 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     'sample_time': sampletime,
                     'train_time': traintime,
                     'pre-training': 1.0,
-                    'accumulate': acc_current
+                    'accumulate': accraw
                 })
                 bar.set_postfix({'loss': f'{rloss.item():.02}'})
 
-                if accraw < accumulate:
+                if acc_warmup > 0 and accraw < accumulate:
                     accraw += accdelta * batch.size(0)
 
                 if warmup > 0:
