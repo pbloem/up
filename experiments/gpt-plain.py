@@ -186,7 +186,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
             print('Start pre-training')
 
-            accumulated = 0
+            accumulated = acc_last = 0
             if acc_warmup > 0:
                 accraw = 1.0
                 accdelta = (accumulate - 1) / acc_warmup
@@ -302,7 +302,8 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                 accumulated += 1
 
                 acc_current = min(int(round(accraw)), accumulate)
-                if i % acc_current == 0: # perform a step
+                if i > acc_last + acc_current: # perform a step
+
                     gn = gradient_norm(model)
 
                     if gc > 0.0:
@@ -317,13 +318,15 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
                     scaler.update()
 
                     opt.zero_grad()
+
                     accumulated = 0
+                    acc_last = i
 
                 traintime = toc()
 
                 wandb.log({
                     'loss': rloss.item(),
-                    'learning_rate': lr,
+                    'learning_rate': lr * acc_current if mult_lr else lr,
                     'sample_time': sampletime,
                     'train_time': traintime,
                     'pre-training': 1.0,
