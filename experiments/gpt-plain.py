@@ -56,7 +56,7 @@ def nl(name : str):
 
     raise Exception(f'Nonlinearity {name} not recognized.')
 
-def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sample_batch_size=100,
+def go(cemb=768, memb=768, cheads=8, mheads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sample_batch_size=100,
          buffer_size=2000, pre_batches=0, model_batch_size=None,
          reset_prob=0.01, num_batches=10_000_000, lr=3e-4, tags=[],
          debug=False, warmup=100_000, eval_every=5_000, print_every=500, gc=1.0,
@@ -107,7 +107,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     scaler = torch.cuda.amp.GradScaler()
 
     # Target for training
-    model = up.GTransformer(emb=emb, heads=heads, depth=mdepth, seq_length=context, num_tokens=NUM_TOKENS)
+    model = up.GTransformer(emb=memb, heads=mheads, depth=mdepth, seq_length=context, num_tokens=NUM_TOKENS)
 
     if torch.cuda.is_available():
         model.cuda()
@@ -159,9 +159,9 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
         if pre_file is None:
             cmp_source = \
-                up.ConditionalTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS) \
+                up.ConditionalTransformer(emb=cemb, heads=cheads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS) \
                 if sequential else \
-                up.GTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nonlinearity), mask_channel=True)
+                up.GTransformer(emb=cemb, heads=cheads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nonlinearity), mask_channel=True)
 
             if torch.cuda.is_available():
                 cmp_source.cuda()
