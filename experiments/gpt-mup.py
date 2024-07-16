@@ -486,20 +486,20 @@ def coord_check(depth=12, steps=3, context=512, model_batch_size=32, disable_mup
             positions = model.pos_embedding(torch.arange(t, device=d()))[None, :, :].expand(b, t, e)
             x = tokens + positions
 
-            l1 = x.abs().mean()
+            l1 = x.abs().mean().item()
             res[dkey].append((width, l1))
             dkey += 1
 
             for i, block in enumerate(model.tblocks):
                 x = block(x)
 
-                l1 = x.abs().mean()
+                l1 = x.abs().mean().item()
                 res[dkey].append((width, l1))
                 dkey += 1
 
             x = model.toprobs(x)
 
-            l1 = x.abs().mean()
+            l1 = x.abs().mean().item()
             res[dkey].append((width, l1))
 
 
