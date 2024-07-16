@@ -5,7 +5,7 @@ from up.data import load_data, cas
 from former.util import d, here, tic, toc, sample_batch, enwik8_string, enwik8_bytes, estimate_compression
 import former
 
-import wandb, random, fire, gzip, math, tqdm
+import wandb, random, fire, gzip, math, tqdm, os
 
 import torch
 from torch import nn
@@ -432,6 +432,9 @@ def coord_check(depth=12, steps=3, context=512, model_batch_size=32, disable_mup
     :return:
     """
 
+    if nocuda:
+        os.environ["CUDA_VISIBLE_DEVICES"] = ","
+
     import matplotlib as mpl
     mpl.use('Agg')
     from matplotlib import pyplot as plt
@@ -464,8 +467,6 @@ def coord_check(depth=12, steps=3, context=512, model_batch_size=32, disable_mup
 
             if torch.cuda.is_available() and not nocuda:
                 source, target = source.cuda(), target.cuda()
-
-            print(model.toprobs.weight.device, source.device)
 
             output = model(source)
             loss = F.cross_entropy(output.transpose(2, 1), target)
