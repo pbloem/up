@@ -451,7 +451,7 @@ def coord_check(depth=12, steps=3, context=512, model_batch_size=32, disable_mup
             model.cuda()
 
         if disable_mup:
-            opt = torch.optim.Adam(lr=3e-4, params=model.parameters)
+            opt = torch.optim.Adam(lr=3e-4, params=model.parameters())
         else:
             opt = model.mup(base_lr=3e-4, width0=640)
 
