@@ -424,7 +424,7 @@ def throughput():
 
     pass
 
-def coord_check(depth=12, steps=3, context=512, model_batch_size=32, disable_mup=False, max_width=14):
+def coord_check(depth=12, steps=3, context=512, model_batch_size=32, disable_mup=False, max_width=14, nocuda=False):
     """
     Sanity check for the muP implementation. The output activations at each layer should have the same magnitude,
     regardless of width.
@@ -447,7 +447,7 @@ def coord_check(depth=12, steps=3, context=512, model_batch_size=32, disable_mup
         model = up.GTransformer(emb=width, heads=width // 32, depth=depth, seq_length=context, num_tokens=NUM_TOKENS,
                                 nosqrt=True)
 
-        if torch.cuda.is_available():
+        if torch.cuda.is_available() and not nocuda:
             model.cuda()
 
         if disable_mup:
@@ -462,28 +462,26 @@ def coord_check(depth=12, steps=3, context=512, model_batch_size=32, disable_mup
             opt.zero_grad()
             source, target = sample_batch(traindata, context, model_batch_size)
 
-            if torch.cuda.is_available():
+            if torch.cuda.is_available() and not nocuda:
                 source, target = source.cuda(), target.cuda()
 
             output = model(source)
             loss = F.cross_entropy(output.transpose(2, 1), target)
 
             loss.backward()
-
-            gn = gradient_norm(model)
             opt.step()
 
         with torch.no_grad():
 
             dkey = 0
             x, _ = sample_batch(traindata, context, model_batch_size)
-            if torch.cuda.is_available():
+            if torch.cuda.is_available() and not nocuda:
                 x = x.cuda()
 
             tokens = model.token_embedding(x)
             b, t, e = tokens.size()
 
-            positions = model.pos_embedding(torch.arange(t, device=d()))[None, :, :].expand(b, t, e)
+            positions = model.pos_embedding(torch.arange(t, device='cpu' if nocuda else d()))[None, :, :].expand(b, t, e)
             x = tokens + positions
 
             l1 = x.abs().mean().item()
