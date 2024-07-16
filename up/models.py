@@ -304,7 +304,7 @@ class GTransformer(nn.Module):
     """
 
     def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False,
-                 autoregressive=True, dropout=0.1, scalefactor=None):
+                 autoregressive=True, dropout=0.1, nosqrt=False):
         """
 
         :param emb:
@@ -313,11 +313,13 @@ class GTransformer(nn.Module):
         :param seq_length:
         :param num_tokens:
         :param nl:
+        :param nosqrt: Don't use the square root in scaling the attention weights. Required for muP to work.
         :param mask_channel: Add an extra output channel (used for masking)
         """
 
         super().__init__()
 
+        self.emb = emb
         self.num_tokens = num_tokens
 
         self.token_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=num_tokens)
@@ -329,7 +331,7 @@ class GTransformer(nn.Module):
         for _ in range(depth):
             tblocks.append(
                 TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl,
-                                 dropout=dropout, sa_kwargs={'scalefactor':scalefactor})
+                                 dropout=dropout, sa_kwargs={'scalefactor': 1/(emb/heads) if nosqrt else 1/math.sqrt(emb/heads) })
             )
 
         self.tblocks = nn.ModuleList(modules=tblocks)
@@ -351,6 +353,67 @@ class GTransformer(nn.Module):
         x = self.toprobs(x)
 
         return x
+
+    def mup(self, base_lr, width0, optcls=torch.optim.Adam):
+        """
+        Implements the muP parametrization of Yang 2022. Re-inits all weights, and returns an Adam optimizer with the
+        required learning rates per weight group.
+
+        :param base_lr: Learning rate at `width = width0`. This is assumed to apply uniformly to all parameters.
+        :param width0:
+        :param optcls: Class for the optimizer to return
+        :return:
+        """
+
+        # Ratio between the current width and the width for which the base LR was tuned
+        widthscale = self.emb / width0
+
+        baseparms = []  # Parameters for which the base learning rate transfers directly
+        scaleparms = [] # Parameters for which the base learning rate is scaled by 1 / fan_in
+
+        # - Input matrices token and pos embeddings. These are not scaled.
+        baseparms.extend(self.token_embedding.parameters())
+        scaleparms.extend(self.pos_embedding.parameters())
+
+        # - Trf blocks
+        for block in self.tblocks:
+
+            # layer norms. Not scaled.
+            baseparms.extend(block.norm1.parameters())
+            baseparms.extend(block.norm2.parameters())
+
+            # SA weights and biases
+            for lin in (block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
+                nn.init.normal_(lin.weight, mean=0.0, std=1/self.emb**0.5)
+                if lin.bias is not None:
+                    nn.init.constant_(lin.bias, 0.0)
+
+                # -- Note that the initialization in the paper is given as variance, where torch requires std, so we
+                #    take the square root.
+                # -- It's not entirely clear from the muP paper how to init the biases, but their code sets them to 0.
+                #    This is also what happens in eqs 3 and 4
+
+            scaleparms.extend(block.attention.parameters())
+
+            # FF weights and biases
+            for mod in block.ff:
+                if type(mod) == nn.Linear:
+                    nn.init.normal_(mod.weight, mean=0.0, std=1/self.emb**0.5)
+                    if mod.bias is not None:
+                        nn.init.constant_(mod.bias, val=0.0)
+
+            scaleparms.extend(block.ff.parameters())
+
+        # - Output head
+        nn.init.normal_(self.toprobs.weight, mean=0.0, std=1/(self.emb * widthscale) ** 5)
+        nn.init.constant_(self.toprobs.bias, val=0.0)
+
+        scaleparms.extend(self.toprobs.parameters())
+
+        return optcls([
+            {'params': baseparms},
+            {'params': scaleparms, 'lr': base_lr / widthscale},
+        ], lr=base_lr)
 
 
 class ConditionalBlock(nn.Module):
@@ -444,7 +507,6 @@ class ConditionalTransformer(nn.Module):
         x = self.toprobs(x)
 
         return x
-
 
 def weights_init(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0):
     """
