@@ -424,7 +424,7 @@ def throughput():
 
     pass
 
-def coord_check(depth=12, steps=3, context=512, model_batch_size=32, disable_mup=False):
+def coord_check(depth=12, steps=3, context=512, model_batch_size=32, disable_mup=False, max_width=14):
     """
     Sanity check for the muP implementation. The output activations at each layer should have the same magnitude,
     regardless of width.
@@ -436,12 +436,14 @@ def coord_check(depth=12, steps=3, context=512, model_batch_size=32, disable_mup
     mpl.use('Agg')
     from matplotlib import pyplot as plt
 
-    widths = [2 ** e for e in range(7, 14)]
+    widths = [2 ** e for e in range(7, max_width+1)]
 
     res = {d:[] for d in range(depth + 3)}
 
+    model = None
     for width in tqdm.tqdm(widths):
 
+        del model
         model = up.GTransformer(emb=width, heads=width // 32, depth=depth, seq_length=context, num_tokens=NUM_TOKENS,
                                 nosqrt=True)
 
