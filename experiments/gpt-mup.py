@@ -66,12 +66,11 @@ def get_depth(width):
     # Constants from the paper
     a, b = 5.039, 5.55e-2
 
-    return int(round(math.log(width) - a) / b)
-
-WIDTHPERHEAD = 128
+    return int(round( (math.log(width) - a) / b ))
 
 def go(
          heads : int,                 # Number of heads. The rest of the model parameters are derived from this.
+         width_per_head=128,
          context=512,
          temperature=0.5,
          target_microbatch_size=52,  # microbatch size for the target model
@@ -117,7 +116,7 @@ def go(
     """
 
     # Compute some values that should be logger to wandb
-    width = heads * WIDTHPERHEAD
+    width = heads * width_per_head
     depth = get_depth(width)
 
     source_microbatch_size = int(round(target_microbatch_size * source_batch_mult))
@@ -317,7 +316,7 @@ def go(
             print('target samples', i)
             print_batch(batch[:4, :], False)
 
-def throughput(fr=3, to=12, context=512, samples=40, burn_in=10):
+def throughput(fr=3, to=12, context=512, samples=40, burn_in=10, width_per_head=128):
     """
     :return:
     """
@@ -326,7 +325,7 @@ def throughput(fr=3, to=12, context=512, samples=40, burn_in=10):
     for heads in trange(fr, to + 1):
 
         # Compute some values that should be logger to wandb
-        width = heads * WIDTHPERHEAD
+        width = heads * width_per_head
         depth = get_depth(width)
 
         print('depth:', depth, ', width: ', width)
