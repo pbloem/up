@@ -5,7 +5,7 @@ from up.data import load_data, cas
 from former.util import d, here, tic, toc, sample_batch, enwik8_string, enwik8_bytes, estimate_compression
 import former
 
-import wandb, random, fire, gzip, math, tqdm, os
+import wandb, random, fire, gzip, math, tqdm, os, json
 
 import torch
 from torch import nn
@@ -93,7 +93,7 @@ def go(
          mask_prob_max=0.7,
          nonlinearity='relu',
          skip_eval=False,             # Whether to skip the evaluation
-         eval_ood=False,              # Whether to evaluate on OOD datasets
+         eval_ood=True,              # Whether to evaluate on OOD datasets
          name=None,                   # WandB name
          eval_batch_mult=2.0,         # How much bigger the eval batches can be than the training batches
          cp_every = 100_000,          # Save a checkpoint for the model every n batches.
@@ -317,13 +317,53 @@ def go(
             print('target samples', i)
             print_batch(batch[:4, :], False)
 
-def throughput():
+def throughput(fr=3, to=12, context=512, samples=40, burn_in=10):
     """
-    TODO: Run throughput tests for a range of model sizes.
     :return:
     """
 
-    pass
+    res = {}
+    for heads in trange(fr, to + 1):
+
+        # Compute some values that should be logger to wandb
+        width = heads * WIDTHPERHEAD
+        depth = get_depth(width)
+
+        print('depth:', depth, ', width: ', width)
+
+        # Target for training
+        model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, num_tokens=NUM_TOKENS,
+                                nosqrt=True)
+
+        dummy_input = torch.randint(low=0, high=NUM_TOKENS, size=(1, context), dtype=torch.long, device=d())
+
+        def dummy_loss(output):
+            b, c, e = output.size()
+            dummy_target = torch.randint(low=0, high=NUM_TOKENS, size=(b, c), dtype=torch.long, device=d())
+            return F.cross_entropy(output.transpose(1, 2), dummy_target)
+
+        print('Starting throughput test.');
+        tic()
+        model_batch_size, batch_sizes, throughputs = up.util.find_batch_size(model=model, loss=dummy_loss,
+                                                                             input=dummy_input, burn_in=burn_in,
+                                                                             samples=samples, wandb=None, use_amp=True)
+
+        res[heads] = {
+            'best', model_batch_size,
+            'all', zip(batch_sizes, throughputs)
+        }
+
+    print('Finished. Best results:')
+    for heads in range(fr, to + 1):
+        print(heads, '\t', res[heads]['best'])
+
+    print('\n\n\n')
+    print('All results.')
+    print(res)
+
+    with open('throughput.json', 'w') as file:
+        json.dump(res, file, indent=6)
+
 
 def coord_check(depth=12, steps=3, context=512, model_batch_size=32, disable_mup=False, max_width=14, nocuda=False):
     """
