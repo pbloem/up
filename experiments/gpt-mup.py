@@ -350,7 +350,7 @@ def throughput(fr=3, to=12, context=512, samples=40, burn_in=10):
 
         res[heads] = {
             'best' :  model_batch_size,
-            'all' : zip(batch_sizes, throughputs)
+            'all' : list(zip(batch_sizes, throughputs))
         }
 
     print('Finished. Best results:')
