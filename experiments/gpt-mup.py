@@ -155,7 +155,7 @@ def go(
     if dp:
         model = torch.nn.DataParallel(model)
 
-    opt = model.mup(base_lr=base_lr, width0=heads0 * WIDTHPERHEAD)
+    opt = model.mup(base_lr=base_lr, width0=heads0 * width_per_head)
 
     print(opt)
 
