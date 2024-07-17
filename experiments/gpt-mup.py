@@ -333,6 +333,8 @@ def throughput(fr=3, to=12, context=512, samples=40, burn_in=10, width_per_head=
         # Target for training
         model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, num_tokens=NUM_TOKENS,
                                 nosqrt=True)
+        if torch.cuda.is_available():
+            model.cuda()
 
         dummy_input = torch.randint(low=0, high=NUM_TOKENS, size=(1, context), dtype=torch.long, device=d())
 
