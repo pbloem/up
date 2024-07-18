@@ -88,7 +88,7 @@ def go(
          print_every=500,             # How often to print the source output
          gc=1.0,                      # Gradient clipping.
          eval_samples=10_000,         # On how many samples to evaluate
-         init_mult_max=50.0,          # multiplier for the weights of the source model
+         weight_mult=50.0,            # multiplier for the weights of the source model
          mask_prob_max=0.7,
          nonlinearity='relu',
          skip_eval=False,             # Whether to skip the evaluation
@@ -211,9 +211,8 @@ def go(
         # Sample noise from a random model and insert into the buffer
         tic()
         with torch.no_grad():
-            # TODO Re-initialize the parameters of source (i.e. sample a random source)
-            # up.weights_init_mup(cmp_source)
-            cmp_source.mup(width0=None, base_lr=None, make_opt=False)
+            # Re-initialize the source
+            up.weight_init_mup(cmp_source)
 
             # slice a random selection of rows from the buffer (without replacement)
             iz = random.sample(range(buffer.size(0)), source_microbatch_size)

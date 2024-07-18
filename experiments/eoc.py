@@ -183,6 +183,85 @@ def printseqs(
                 print(''.join(str(s) for s in  up.util.remap(seq, 9)))
         print()
 
+def get_depth(width):
+    """
+    Compute the optimal depth for a transformer model of a given width.
+
+    :param width:
+    :return:
+    """
+    # Constants from the paper
+    a, b = 5.039, 5.55e-2
+
+    return int(round( (math.log(width) - a) / b ))
+
+def rmask(tensor, prob):
+
+    mask = torch.bernoulli(torch.full_like(tensor, fill_value=prob)).to(torch.bool)
+    tensor[mask] = 0.0
+
+
+def mup_sample(
+        widthperhead=128,
+        heads=3,
+        context=512,
+        nonlinearity='relu',
+        samples=4,
+        batch_size=4,
+        temperature=1,
+        mult=50,
+        usemask=False,
+    ):
+
+    num_tokens = 256
+    width = heads * widthperhead
+
+
+    for _ in range(samples):
+        # Initialize the source model
+        source = up.GTransformer(emb=width, heads=heads, depth=get_depth(width), seq_length=context, num_tokens=num_tokens,
+                nl=nl(nonlinearity), mask_channel=True)
+
+        source.mup(base_lr=None, width0=None, make_opt=False)
+
+        source.token_embedding.weight.data *= 2
+        # rmask(source.token_embedding.weight.data, random.random())
+
+        source.pos_embedding.weight.data *= 2
+        # rmask(source.pos_embedding.weight.data, random.random())
+
+        for block in source.tblocks:
+            for lin in (block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
+                lin.weight.data *= mult
+                # rmask(lin.weight.data, random.random())
+
+            for mod in block.ff:
+                if type(mod) == nn.Linear:
+                    mod.weight.data *= mult
+                    # rmask(mod.weight.data, random.random())
+
+            source.toprobs.weight.data *= 2
+
+        if torch.cuda.is_available():
+            source.cuda()
+
+        input = torch.randint(low=0, high=num_tokens, size=(batch_size, context), device=d())
+        # input = torch.full(fill_value=0, size=(batch_size, context), device=d())
+        output = source(input)
+
+        chars, mask = output[:, :, :-1], output[:, :, -1]
+
+        chars = sample(chars, temperature=temperature)
+        mask = torch.sigmoid(mask).to(torch.bool)
+
+        if usemask:
+            chars[mask] = input[mask]
+
+        for seq in chars.tolist():
+            print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
+        print('---')
+
+
 def nl(name : str):
     if name == 'relu':
         return torch.relu

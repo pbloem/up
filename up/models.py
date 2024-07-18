@@ -390,6 +390,7 @@ class GTransformer(nn.Module):
                 nn.init.normal_(lin.weight, mean=0.0, std=1/self.emb**0.5)
                 if lin.bias is not None:
                     nn.init.constant_(lin.bias, 0.0)
+                    # nn.init.normal_(lin.bias, mean=0.0, std=ff_mult)
 
                 # -- Note that the initialization in the paper is given as variance, where torch requires std, so we
                 #    take the square root.
@@ -405,6 +406,7 @@ class GTransformer(nn.Module):
                     nn.init.normal_(mod.weight, mean=0.0, std=1/self.emb**0.5)
                     if mod.bias is not None:
                         nn.init.constant_(mod.bias, val=0.0)
+                        # nn.init.normal_(mod.bias, mean=0.0, std=ff_mult)
 
             if make_opt:
                 scaleparms.extend(block.ff.parameters())
@@ -620,3 +622,31 @@ def weights_init_minimal(model, init_mult_max, mup=False):
                 mod.reset_parameters()
 
             mod.weight.data *= wm
+
+def weight_init_mup(source, mult1=2, mult2=100):
+    """
+    Initialization found (by trial and error) to be stable unde rthe levine/mup scaling regome.
+
+    :param model:
+    :return:
+    """
+    source.mup(base_lr=None, width0=None, make_opt=False)
+
+    source.token_embedding.weight.data *= mult1
+    # rmask(source.token_embedding.weight.data, random.random())
+
+    source.pos_embedding.weight.data *= mult1
+    # rmask(source.pos_embedding.weight.data, random.random())
+
+    for block in source.tblocks:
+        for lin in (
+        block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
+            lin.weight.data *= mult2
+            # rmask(lin.weight.data, random.random())
+
+        for mod in block.ff:
+            if type(mod) == nn.Linear:
+                mod.weight.data *= mult2
+                # rmask(mod.weight.data, random.random())
+
+        source.toprobs.weight.data *= mult1
