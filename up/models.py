@@ -530,10 +530,8 @@ def weights_init(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0, mup=Fa
     :return:
     """
 
-    basewidth = 5*128
-
     if mup:
-        model.mup(base_lr=None, width0=basewidth, make_opt=False)
+        model.mup(base_lr=None, width0=None, make_opt=False)
         # The base_lr and width0 are only used for the optimizer
 
     if hasattr(model, 'alphas'):
@@ -601,7 +599,7 @@ def weights_init_plain(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0):
                 mod.weight.data[mask] = 0.0
 
 
-def weights_init_minimal(model, init_mult_max):
+def weights_init_minimal(model, init_mult_max, mup=False):
     """
     Samples one random weight multiplier that is applied uniformly to the whole network.
     :param model:
@@ -609,11 +607,16 @@ def weights_init_minimal(model, init_mult_max):
     :return:
     """
 
+    if mup:
+        model.mup(base_lr=None, width0=None, make_opt=False)
+
     logwm = random.random() * (math.log(init_mult_max) - 1) + 1
     wm =  math.exp(logwm)
 
     for mod in model.modules():
         if type(mod) is nn.Linear or type(mod) is nn.Embedding:
 
-            mod.reset_parameters()
+            if not mup:
+                mod.reset_parameters()
+
             mod.weight.data *= wm

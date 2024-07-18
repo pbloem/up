@@ -212,7 +212,8 @@ def go(
         tic()
         with torch.no_grad():
             # TODO Re-initialize the parameters of source (i.e. sample a random source)
-            up.weights_init(cmp_source, init_mult_max=init_mult_max, mask_prob_max=mask_prob_max, mup=True)
+            # up.weights_init_mup(cmp_source)
+            cmp_source.mup(width0=None, base_lr=None, make_opt=False)
 
             # slice a random selection of rows from the buffer (without replacement)
             iz = random.sample(range(buffer.size(0)), source_microbatch_size)
