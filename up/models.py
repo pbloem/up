@@ -354,33 +354,36 @@ class GTransformer(nn.Module):
 
         return x
 
-    def mup(self, base_lr, width0, optcls=torch.optim.Adam):
+    def mup(self, base_lr, width0, optcls=torch.optim.Adam, make_opt=True):
         """
         Implements the muP parametrization of Yang 2022. Re-inits all weights, and returns an Adam optimizer with the
         required learning rates per weight group.
 
         :param base_lr: Learning rate at `width = width0`. This is assumed to apply uniformly to all parameters.
         :param width0:
-        :param optcls: Class for the optimizer to return
-        :return:
+        :param optcls: Class for the optimizer to return (note that the current scaling applies to Adam and some variants, but not to SGD)
+        :param make_opt: Create and return an muP optimizer.
+        :return: A muP optimizer if requested, else nothing.
         """
 
         # Ratio between the current width and the width for which the base LR was tuned
         widthscale = self.emb / width0
 
-        baseparms = []  # Parameters for which the base learning rate transfers directly
-        scaleparms = [] # Parameters for which the base learning rate is scaled by 1 / fan_in
+        if make_opt:
+            baseparms = []  # Parameters for which the base learning rate transfers directly
+            scaleparms = [] # Parameters for which the base learning rate is scaled by 1 / fan_in
 
-        # - Input matrices token and pos embeddings. These are not scaled.
-        baseparms.extend(self.token_embedding.parameters())
-        scaleparms.extend(self.pos_embedding.parameters())
+            # - Input matrices token and pos embeddings. These are not scaled.
+            baseparms.extend(self.token_embedding.parameters())
+            scaleparms.extend(self.pos_embedding.parameters())
 
         # - Trf blocks
         for block in self.tblocks:
 
             # layer norms. Not scaled.
-            baseparms.extend(block.norm1.parameters())
-            baseparms.extend(block.norm2.parameters())
+            if make_opt:
+                baseparms.extend(block.norm1.parameters())
+                baseparms.extend(block.norm2.parameters())
 
             # SA weights and biases
             for lin in (block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
@@ -393,7 +396,8 @@ class GTransformer(nn.Module):
                 # -- It's not entirely clear from the muP paper how to init the biases, but their code sets them to 0.
                 #    This is also what happens in eqs 3 and 4
 
-            scaleparms.extend(block.attention.parameters())
+            if make_opt:
+                scaleparms.extend(block.attention.parameters())
 
             # FF weights and biases
             for mod in block.ff:
@@ -402,18 +406,20 @@ class GTransformer(nn.Module):
                     if mod.bias is not None:
                         nn.init.constant_(mod.bias, val=0.0)
 
-            scaleparms.extend(block.ff.parameters())
+            if make_opt:
+                scaleparms.extend(block.ff.parameters())
 
         # - Output head
         nn.init.normal_(self.toprobs.weight, mean=0.0, std=1/(self.emb * widthscale) ** 5)
         nn.init.constant_(self.toprobs.bias, val=0.0)
 
-        scaleparms.extend(self.toprobs.parameters())
+        if make_opt:
+            scaleparms.extend(self.toprobs.parameters())
 
-        return optcls([
-            {'params': baseparms},
-            {'params': scaleparms, 'lr': base_lr / widthscale},
-        ], lr=base_lr)
+            return optcls([
+                {'params': baseparms},
+                {'params': scaleparms, 'lr': base_lr / widthscale},
+            ], lr=base_lr)
 
 
 class ConditionalBlock(nn.Module):
@@ -508,7 +514,7 @@ class ConditionalTransformer(nn.Module):
 
         return x
 
-def weights_init(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0):
+def weights_init(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0, mup=False):
     """
     Re-initialize the weights of the given model.
 
@@ -523,6 +529,9 @@ def weights_init(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0):
         `mask_prob_max`.
     :return:
     """
+
+    if mup:
+        model.mup(make_opt=False)
 
     if hasattr(model, 'alphas'):
         model.alphas = torch.bernoulli(torch.full_like(model.alphas, fill_value=0.5))
@@ -543,7 +552,8 @@ def weights_init(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0):
 
             # print(type(mod))
             # print(mod.weight.data[0])
-            mod.reset_parameters()
+            if not mup:
+                mod.reset_parameters()
 
             mod.weight.data *= init_mult
             # mod.weight.data **= mask_prob
