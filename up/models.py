@@ -410,9 +410,7 @@ class GTransformer(nn.Module):
                 scaleparms.extend(block.ff.parameters())
 
         # - Output head
-        nn.init.normal_(self.toprobs.weight, mean=0.0, std=(5/128) ** 0.5 * 1/(self.emb * widthscale) ** 0.5 )
-        # -- The multiplication by 128 is not strictly necessary for muP to work, but it stabilizes the logits for
-        #    low numbers of heads
+        nn.init.normal_(self.toprobs.weight, mean=0.0, std=1/(self.emb * widthscale) ** 5)
         nn.init.constant_(self.toprobs.bias, val=0.0)
 
         if make_opt:
