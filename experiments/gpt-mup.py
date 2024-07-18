@@ -88,7 +88,8 @@ def go(
          print_every=500,             # How often to print the source output
          gc=1.0,                      # Gradient clipping.
          eval_samples=10_000,         # On how many samples to evaluate
-         weight_mult=50.0,            # multiplier for the weights of the source model
+         weight_mult1=1.4,           # multiplier for the weights of the source model
+         weight_mult2=10,           # multiplier for the weights of the source model
          mask_prob_max=0.7,
          nonlinearity='relu',
          skip_eval=False,             # Whether to skip the evaluation
@@ -212,7 +213,7 @@ def go(
         tic()
         with torch.no_grad():
             # Re-initialize the source
-            up.weights_init_mup(cmp_source, mult2=weight_mult)
+            up.weights_init_mup(cmp_source, mult1=weight_mult1, mult2=weight_mult2)
 
             # slice a random selection of rows from the buffer (without replacement)
             iz = random.sample(range(buffer.size(0)), source_microbatch_size)

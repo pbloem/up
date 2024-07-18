@@ -240,7 +240,7 @@ def mup_sample(
                     mod.weight.data *= mult
                     # rmask(mod.weight.data, random.random())
 
-            source.toprobs.weight.data *= 2
+            source.toprobs.weight.data *= 1.4
 
         if torch.cuda.is_available():
             source.cuda()

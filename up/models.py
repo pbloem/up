@@ -623,7 +623,7 @@ def weights_init_minimal(model, init_mult_max, mup=False):
 
             mod.weight.data *= wm
 
-def weights_init_mup(source, mult1=2, mult2=100):
+def weights_init_mup(source, mult1=1.4, mult2=100):
     """
     Initialization found (by trial and error) to be stable unde rthe levine/mup scaling regome.
 
