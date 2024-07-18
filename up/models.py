@@ -366,10 +366,10 @@ class GTransformer(nn.Module):
         :return: A muP optimizer if requested, else nothing.
         """
 
-        # Ratio between the current width and the width for which the base LR was tuned
-        widthscale = self.emb / width0
-
         if make_opt:
+            # Ratio between the current width and the width for which the base LR was tuned
+            widthscale = self.emb / width0
+
             baseparms = []  # Parameters for which the base learning rate transfers directly
             scaleparms = [] # Parameters for which the base learning rate is scaled by 1 / fan_in
 
@@ -410,7 +410,7 @@ class GTransformer(nn.Module):
                 scaleparms.extend(block.ff.parameters())
 
         # - Output head
-        nn.init.normal_(self.toprobs.weight, mean=0.0, std=1/(self.emb * widthscale) ** 5)
+        nn.init.normal_(self.toprobs.weight, mean=0.0, std=1 / self.emb ) # NB. We scale by variance 1/emb^2, so std 1/emb
         nn.init.constant_(self.toprobs.bias, val=0.0)
 
         if make_opt:
