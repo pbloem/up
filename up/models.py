@@ -366,10 +366,10 @@ class GTransformer(nn.Module):
         :return: A muP optimizer if requested, else nothing.
         """
 
-        # Ratio between the current width and the width for which the base LR was tuned
-        widthscale = self.emb / width0
-
         if make_opt:
+            # Ratio between the current width and the width for which the base LR was tuned
+            widthscale = self.emb / width0
+
             baseparms = []  # Parameters for which the base learning rate transfers directly
             scaleparms = [] # Parameters for which the base learning rate is scaled by 1 / fan_in
 
@@ -531,7 +531,8 @@ def weights_init(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0, mup=Fa
     """
 
     if mup:
-        model.mup(make_opt=False)
+        model.mup(base_lr=None, width0=None, make_opt=False)
+        # The base_lr and width0 are only used for the optimizer
 
     if hasattr(model, 'alphas'):
         model.alphas = torch.bernoulli(torch.full_like(model.alphas, fill_value=0.5))
