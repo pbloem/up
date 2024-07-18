@@ -366,10 +366,10 @@ class GTransformer(nn.Module):
         :return: A muP optimizer if requested, else nothing.
         """
 
-        if make_opt:
-            # Ratio between the current width and the width for which the base LR was tuned
-            widthscale = self.emb / width0
+        # Ratio between the current width and the width for which the base LR was tuned
+        widthscale = self.emb / width0
 
+        if make_opt:
             baseparms = []  # Parameters for which the base learning rate transfers directly
             scaleparms = [] # Parameters for which the base learning rate is scaled by 1 / fan_in
 
@@ -410,7 +410,7 @@ class GTransformer(nn.Module):
                 scaleparms.extend(block.ff.parameters())
 
         # - Output head
-        nn.init.normal_(self.toprobs.weight, mean=0.0, std=(5*128) * (1/(self.emb ** 2)))
+        nn.init.normal_(self.toprobs.weight, mean=0.0, std=(1/(self.emb * widthscale)))
         # -- The multiplication by 128 is not strictly necessary for muP to work, but it stabilizes the logits for
         #    low numbers of heads
         nn.init.constant_(self.toprobs.bias, val=0.0)
@@ -532,8 +532,10 @@ def weights_init(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0, mup=Fa
     :return:
     """
 
+    basewidth = 5*128
+
     if mup:
-        model.mup(base_lr=None, width0=None, make_opt=False)
+        model.mup(base_lr=None, width0=basewidth, make_opt=False)
         # The base_lr and width0 are only used for the optimizer
 
     if hasattr(model, 'alphas'):
