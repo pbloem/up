@@ -632,10 +632,10 @@ def weights_init_mup(source, mult1=1.4, mult2=100):
     """
     source.mup(base_lr=None, width0=None, make_opt=False)
 
-    source.token_embedding.weight.data *= mult1
+    # source.token_embedding.weight.data *= mult1
     # rmask(source.token_embedding.weight.data, random.random())
 
-    source.pos_embedding.weight.data *= mult1
+    # source.pos_embedding.weight.data *= mult1
     # rmask(source.pos_embedding.weight.data, random.random())
 
     for block in source.tblocks:

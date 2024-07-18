@@ -224,23 +224,23 @@ def mup_sample(
 
         source.mup(base_lr=None, width0=None, make_opt=False)
 
-        source.token_embedding.weight.data *= 2
+        source.token_embedding.weight.data *= 1
         # rmask(source.token_embedding.weight.data, random.random())
 
-        source.pos_embedding.weight.data *= 2
+        source.pos_embedding.weight.data *= 1
         # rmask(source.pos_embedding.weight.data, random.random())
 
         for block in source.tblocks:
             for lin in (block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
                 lin.weight.data *= mult
-                # rmask(lin.weight.data, random.random())
+                rmask(lin.weight.data, random.random())
 
             for mod in block.ff:
                 if type(mod) == nn.Linear:
                     mod.weight.data *= mult
-                    # rmask(mod.weight.data, random.random())
+                    rmask(mod.weight.data, random.random())
 
-            source.toprobs.weight.data *= 1.4
+            source.toprobs.weight.data *= 4
 
         if torch.cuda.is_available():
             source.cuda()
