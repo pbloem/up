@@ -101,7 +101,8 @@ def go(
          cp_every = 100_000,          # Save a checkpoint for the model every n batches.
          dp = False,                  # Use data-parallel (multi GPU)
          mbwarmup = 100_000,          # Accumulation warmup (in instances)
-         old_init=False
+         old_init=False,
+         init_factor=1                # Multiplier for the muP init
        ):
 
     """
@@ -159,7 +160,7 @@ def go(
     if dp:
         model = torch.nn.DataParallel(model)
 
-    opt = model.mup(base_lr=base_lr, width0=heads0 * width_per_head)
+    opt = model.mup(base_lr=base_lr, width0=heads0 * width_per_head, factor=init_factor)
 
     print(opt)
 
@@ -220,7 +221,7 @@ def go(
             if old_init:
                 up.weights_init(cmp_source, init_mult_max=50.0, mask_prob_max=0.7)
             else:
-                up.weights_init_mup(cmp_source, mult1=weight_mult1, mult2=weight_mult2, multb=weight_multb, mask=source_mask)
+                up.weights_init_mup(cmp_source, mult1=weight_mult1, mult2=weight_mult2, multb=weight_multb, mask=source_mask, factor=init_factor)
 
             # slice a random selection of rows from the buffer (without replacement)
             iz = random.sample(range(buffer.size(0)), source_microbatch_size)
