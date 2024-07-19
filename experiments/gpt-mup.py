@@ -312,10 +312,9 @@ def go(
         })
 
         if skip_mup:
-            pass
-            # wandb.log({
-            #     'learning_rate (stable)': opt.'lr']
-            # })
+            wandb.log({
+                'learning_rate (stable)': opt.param_groups[0]['lr'],
+            })
         else:
             wandb.log({
                 'learning_rate (stable)': opt.param_groups[0]['lr'],
