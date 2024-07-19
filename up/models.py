@@ -412,7 +412,7 @@ class GTransformer(nn.Module):
                 scaleparms.extend(block.ff.parameters())
 
         # - Output head
-        nn.init.normal_(self.toprobs.weight, mean=0.0, std=(5/128) * 1 / self.emb ) # NB. We scale by variance 1/emb^2, so std 1/emb
+        nn.init.normal_(self.toprobs.weight, mean=0.0, std=(5*128) * 1 / self.emb ) # NB. We scale by variance 1/emb^2, so std 1/emb
         nn.init.constant_(self.toprobs.bias, val=0.0)
 
         if make_opt:
