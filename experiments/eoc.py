@@ -209,7 +209,9 @@ def mup_sample(
         samples=4,
         batch_size=4,
         temperature=1,
-        mult=50,
+        mult1=1,
+        mult2=2,
+        multb=1,
         usemask=False,
     ):
 
@@ -232,15 +234,21 @@ def mup_sample(
 
         for block in source.tblocks:
             for lin in (block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
-                lin.weight.data *= mult
+                lin.weight.data *= mult1
+                if lin.bias is not None:
+                    lin.bias.data.normal_() * multb
                 rmask(lin.weight.data, random.random())
 
             for mod in block.ff:
                 if type(mod) == nn.Linear:
-                    mod.weight.data *= mult
+                    mod.weight.data *= mult1
+                    if mod.bias is not None:
+                        mod.bias.data.normal_() * multb
                     rmask(mod.weight.data, random.random())
 
-            source.toprobs.weight.data *= 4
+            source.toprobs.weight.data *= mult2
+            source.toprobs.bias.data.normal_() * multb
+
 
         if torch.cuda.is_available():
             source.cuda()

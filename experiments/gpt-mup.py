@@ -73,7 +73,7 @@ def go(
          width_per_head=128,
          context=512,
          temperature=0.5,
-         target_microbatch_size=52,  # microbatch size for the target model
+         target_microbatch_size=52,   # microbatch size for the target model
          macrobatch_size=256,         # macrobatch size for the target model
          source_batch_mult=2.0,       # how much bigger the batch size is for the source model than the microbatch size
                                       # for the target model
@@ -88,17 +88,19 @@ def go(
          print_every=500,             # How often to print the source output
          gc=1.0,                      # Gradient clipping.
          eval_samples=10_000,         # On how many samples to evaluate
-         weight_mult1=1.4,           # multiplier for the weights of the source model
-         weight_mult2=10,           # multiplier for the weights of the source model
+         weight_mult1=1.4,            # multiplier for the weights of the source model
+         weight_mult2=10,             # multiplier for the weights (grp 1) of the source model
+         weight_multb=1,              # multiplier for the weights (grp 2) of the source model
+         source_mask=False,           # Whether to apply masking to the source model
          mask_prob_max=0.7,
          nonlinearity='relu',
          skip_eval=False,             # Whether to skip the evaluation
-         eval_ood=True,              # Whether to evaluate on OOD datasets
+         eval_ood=True,               # Whether to evaluate on OOD datasets
          name=None,                   # WandB name
          eval_batch_mult=2.0,         # How much bigger the eval batches can be than the training batches
          cp_every = 100_000,          # Save a checkpoint for the model every n batches.
          dp = False,                  # Use data-parallel (multi GPU)
-         mbwarmup = 100_000                # Accumulation warmup (in instances)
+         mbwarmup = 100_000           # Accumulation warmup (in instances)
        ):
 
     """

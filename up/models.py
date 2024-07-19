@@ -623,7 +623,12 @@ def weights_init_minimal(model, init_mult_max, mup=False):
 
             mod.weight.data *= wm
 
-def weights_init_mup(source, mult1=1.4, mult2=100):
+def rmask(tensor, prob):
+
+    mask = torch.bernoulli(torch.full_like(tensor, fill_value=prob)).to(torch.bool)
+    tensor[mask] = 0.0
+
+def weights_init_mup(source, mult1=1.4, mult2=100, multb=0.0, mask=False):
     """
     Initialization found (by trial and error) to be stable unde rthe levine/mup scaling regome.
 
@@ -642,11 +647,22 @@ def weights_init_mup(source, mult1=1.4, mult2=100):
         for lin in (
         block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
             lin.weight.data *= mult2
-            # rmask(lin.weight.data, random.random())
+
+            if lin.bias is not None:
+                lin.bias.data.normal_() * multb
+
+            if mask:
+                rmask(lin.weight.data, random.random())
 
         for mod in block.ff:
             if type(mod) == nn.Linear:
                 mod.weight.data *= mult2
-                # rmask(mod.weight.data, random.random())
+
+                if mod.bias is not None:
+                    mod.bias.data.normal_() * multb
+
+                if mask:
+                    rmask(mod.weight.data, random.random())
 
         source.toprobs.weight.data *= mult1
+        source.toprobs.bias.data.normal_() * multb
