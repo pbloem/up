@@ -100,7 +100,8 @@ def go(
          eval_batch_mult=2.0,         # How much bigger the eval batches can be than the training batches
          cp_every = 100_000,          # Save a checkpoint for the model every n batches.
          dp = False,                  # Use data-parallel (multi GPU)
-         mbwarmup = 100_000           # Accumulation warmup (in instances)
+         mbwarmup = 100_000,          # Accumulation warmup (in instances)
+         old_init=False
        ):
 
     """
@@ -215,7 +216,11 @@ def go(
         tic()
         with torch.no_grad():
             # Re-initialize the source
-            up.weights_init_mup(cmp_source, mult1=weight_mult1, mult2=weight_mult2, multb=weight_multb, mask=source_mask)
+
+            if old_init:
+                up.weights_init(cmp_source, init_mult_max=50.0, mask_prob_max=0.7)
+            else:
+                up.weights_init_mup(cmp_source, mult1=weight_mult1, mult2=weight_mult2, multb=weight_multb, mask=source_mask)
 
             # slice a random selection of rows from the buffer (without replacement)
             iz = random.sample(range(buffer.size(0)), source_microbatch_size)
