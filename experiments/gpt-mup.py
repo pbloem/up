@@ -102,7 +102,8 @@ def go(
          dp = False,                  # Use data-parallel (multi GPU)
          mbwarmup = 100_000,          # Accumulation warmup (in instances)
          old_init=False,
-         init_factor=1                # Multiplier for the muP init
+         init_factor=1,               # Multiplier for the muP init
+         skip_mup=False
        ):
 
     """
@@ -160,9 +161,11 @@ def go(
     if dp:
         model = torch.nn.DataParallel(model)
 
-    opt = model.mup(base_lr=base_lr, width0=heads0 * width_per_head, factor=init_factor)
-
-    print(opt)
+    if not skip_mup:
+        opt = model.mup(base_lr=base_lr, width0=heads0 * width_per_head, factor=init_factor)
+        print(opt)
+    else:
+        opt = torch.optim.Adam(lr=base_lr, params=model.parameters())
 
     if warmup > 0:
         # warmup = warmup / accumulate
