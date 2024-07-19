@@ -387,7 +387,7 @@ class GTransformer(nn.Module):
 
             # SA weights and biases
             for lin in (block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
-                nn.init.normal_(lin.weight, mean=0.0, std=1/self.emb**0.5)
+                nn.init.normal_(lin.weight, mean=0.0, std=1/mod.in_features**0.5)
                 if lin.bias is not None:
                     nn.init.constant_(lin.bias, 0.0)
                     # nn.init.normal_(lin.bias, mean=0.0, std=ff_mult)
@@ -403,7 +403,7 @@ class GTransformer(nn.Module):
             # FF weights and biases
             for mod in block.ff:
                 if type(mod) == nn.Linear:
-                    nn.init.normal_(mod.weight, mean=0.0, std=1/self.emb**0.5)
+                    nn.init.normal_(mod.weight, mean=0.0, std=1/mod.in_features**0.5)
                     if mod.bias is not None:
                         nn.init.constant_(mod.bias, val=0.0)
                         # nn.init.normal_(mod.bias, mean=0.0, std=ff_mult)
@@ -412,7 +412,7 @@ class GTransformer(nn.Module):
                 scaleparms.extend(block.ff.parameters())
 
         # - Output head
-        nn.init.normal_(self.toprobs.weight, mean=0.0, std=(5*128) * 1 / self.emb ) # NB. We scale by variance 1/emb^2, so std 1/emb
+        nn.init.normal_(self.toprobs.weight, mean=0.0, std=1 / self.emb ) # NB. We scale by variance 1/emb^2, so std 1/emb
         nn.init.constant_(self.toprobs.bias, val=0.0)
 
         if make_opt:
