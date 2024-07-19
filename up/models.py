@@ -387,7 +387,7 @@ class GTransformer(nn.Module):
 
             # SA weights and biases
             for lin in (block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
-                nn.init.normal_(lin.weight, mean=0.0, std=1/mod.in_features**0.5)
+                nn.init.normal_(lin.weight, mean=0.0, std=1/lin.in_features**0.5)
                 if lin.bias is not None:
                     nn.init.constant_(lin.bias, 0.0)
                     # nn.init.normal_(lin.bias, mean=0.0, std=ff_mult)
