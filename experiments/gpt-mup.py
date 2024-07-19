@@ -305,13 +305,22 @@ def go(
 
         wandb.log({
             'loss': rloss.item(),
-            'learning_rate (stable)': opt.param_groups[0]['lr'],
-            'learning_rate (scaled)': opt.param_groups[1]['lr'],
             'sample_time': sampletime,
             'train_time': traintime,
             'pre-training': 1.0,
             'mbraw': mbraw
         })
+
+        if skip_mup:
+            pass
+            # wandb.log({
+            #     'learning_rate (stable)': opt.'lr']
+            # })
+        else:
+            wandb.log({
+                'learning_rate (stable)': opt.param_groups[0]['lr'],
+                'learning_rate (scaled)': opt.param_groups[1]['lr'],
+            })
 
         bar.set_postfix({'loss': f'{rloss.item():.02}'})
 
