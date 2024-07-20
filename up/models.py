@@ -372,7 +372,7 @@ class GTransformer(nn.Module):
             widthscale = self.emb / width0
 
             baseparms = []  # Parameters for which the base learning rate transfers directly
-            scaleparms = [] # Parameters for which the base learning rate is scaled by 1 / emb
+            scaleparms = [] # Parameters for which the base learning rate is multiplied by 1 / widthscale
 
             # - Input matrices token and pos embeddings. These are not scaled.
             baseparms.extend(self.token_embedding.parameters())
