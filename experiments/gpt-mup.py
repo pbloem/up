@@ -131,6 +131,9 @@ def go(
     source_microbatch_size = int(round(target_microbatch_size * source_batch_mult))
     buffer_size = int(round(source_microbatch_size * buffer_size_mult))
 
+    heads = max(width//width_per_head, min_heads)
+    assert width % heads == 0
+
     wd = wandb.init(
         name=name,
         project='up',
@@ -157,9 +160,6 @@ def go(
     print('depth:', depth, ', width: ', width)
 
     # Target for training
-
-    heads = max(width//width_per_head, min_heads)
-    assert width % heads == 0
     model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, num_tokens=NUM_TOKENS, nosqrt=True, output_mult=out_factor)
 
     if torch.cuda.is_available():
