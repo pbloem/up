@@ -162,10 +162,11 @@ def go(
         model = torch.nn.DataParallel(model)
 
     if not skip_mup:
-        _ = model.mup(base_lr=base_lr, width0=heads0 * width_per_head, factor=init_factor)
-        # DEBUG
-        opt = torch.optim.Adam(lr=base_lr, params=model.parameters())
+        opt = model.mup(base_lr=base_lr, width0=heads0 * width_per_head, factor=init_factor)
+        print(opt)
     else:
+        # DEBUG
+        _ = model.mup(base_lr=base_lr, width0=heads0 * width_per_head, factor=init_factor)
         opt = torch.optim.Adam(lr=base_lr, params=model.parameters())
 
     if warmup > 0:
