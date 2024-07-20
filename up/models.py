@@ -421,7 +421,7 @@ class GTransformer(nn.Module):
         nn.init.constant_(self.toprobs.bias, val=0.0)
 
         if make_opt:
-            baseparms.extend(self.toprobs.parameters())
+            scaleparms.extend(self.toprobs.parameters())
 
             return optcls([
                 {'params': baseparms},
