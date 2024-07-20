@@ -224,7 +224,7 @@ def go(
             if old_init:
                 up.weights_init(cmp_source, init_mult_max=50.0, mask_prob_max=0.7)
             else:
-                up.weights_init_mup(cmp_source, mult1=weight_mult1, mult2=weight_mult2, multb=weight_multb, mask=source_mask, factor=init_factor)
+                up.weights_init_mup(cmp_source, mult1=weight_mult1, mult2=weight_mult2, multb=weight_multb, mask=source_mask)
 
             # slice a random selection of rows from the buffer (without replacement)
             iz = random.sample(range(buffer.size(0)), source_microbatch_size)
