@@ -304,7 +304,7 @@ class GTransformer(nn.Module):
     """
 
     def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False,
-                 autoregressive=True, dropout=0.1, nosqrt=False):
+                 autoregressive=True, dropout=0.1, nosqrt=False, output_mult=1):
         """
 
         :param emb:
@@ -314,6 +314,7 @@ class GTransformer(nn.Module):
         :param num_tokens:
         :param nl:
         :param nosqrt: Don't use the square root in scaling the attention weights. Required for muP to work.
+        :param output_mult: Scalar Multiplied by the output logits.
         :param mask_channel: Add an extra output channel (used for masking)
         """
 
@@ -321,6 +322,7 @@ class GTransformer(nn.Module):
 
         self.emb = emb
         self.num_tokens = num_tokens
+        self.output_mult = output_mult
 
         self.token_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=num_tokens)
         self.pos_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=seq_length)
@@ -350,11 +352,11 @@ class GTransformer(nn.Module):
         for i, block in enumerate(self.tblocks):
             x = block(x)
 
-        x = self.toprobs(x)
+        x = self.toprobs(x) * self.output_mult
 
         return x
 
-    def mup(self, base_lr, width0, optcls=torch.optim.Adam, make_opt=True, factor=4):
+    def mup(self, base_lr, width0, optcls=torch.optim.Adam, make_opt=True, factor=1, factor_out=1):
         """
         Implements the muP parametrization of Yang 2022. Re-inits all weights, and returns an Adam optimizer with the
         required learning rates per weight group.
@@ -363,7 +365,9 @@ class GTransformer(nn.Module):
         :param width0:
         :param optcls: Class for the optimizer to return (note that the current scaling applies to Adam and some variants, but not to SGD)
         :param make_opt: Create and return an muP optimizer.
-        :param factor: A multiplier for the base initialization standard deviation (this is the sqrae root of the sigmas in the paper).
+        :param factor: A multiplier for the base initialization standard deviation (this is the square root of the sigmas in the paper).
+        :param factor_out: Factor for the output init. May need to be set to width0 if trying to replicate an SP-trained
+             model
         :return: A muP optimizer if requested, else nothing.
         """
 
@@ -417,7 +421,7 @@ class GTransformer(nn.Module):
                             scaleparms.extend(mod.parameters())
 
         # - Output head
-        nn.init.normal_(self.toprobs.weight, mean=0.0, std=factor * (5*128)**0.5 * (1/ self.emb) ) # NB. We scale by variance 1/emb^2, so std 1/emb
+        nn.init.normal_(self.toprobs.weight, mean=0.0, std=factor_out * (1/ self.emb) ) # NB. We scale by variance 1/emb^2, so std 1/emb
         nn.init.constant_(self.toprobs.bias, val=0.0)
 
         if make_opt:

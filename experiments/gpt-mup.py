@@ -69,8 +69,10 @@ def get_depth(width):
     return int(round( (math.log(width) - a) / b ))
 
 def go(
-         heads : int,                 # Number of heads. The rest of the model parameters are derived from this.
-         width_per_head=128,
+         wfactor : int,               # Scaling step for the width (steps of 64)
+         width_per_step=64,
+         min_heads=32,                # minimum nr of heads
+         width_per_head=128,          # dimension per head (above the minimum)
          context=512,
          temperature=0.5,
          target_microbatch_size=52,   # microbatch size for the target model
@@ -80,8 +82,8 @@ def go(
          buffer_size_mult=20,         # How much bigger the buffer is than one source batch
          batches=300_000,             # For how many microbatches to pretrain
          reset_prob=0.01,
-         heads0 = 5,                  # The number of heads for which the base learning rate is set
-         base_lr=3e-4,                # Base learning rate at heads0
+         width0 = 640,                # The width for which the base learning rate is tuned
+         base_lr=3e-4,                # Base learning rate at width0
          debug=False,
          warmup=100_000,
          eval_every=5_000,            # How often (in microbatches) to evaluate
@@ -103,7 +105,8 @@ def go(
          mbwarmup = 100_000,          # Accumulation warmup (in instances)
          old_init=False,
          init_factor=1,               # Multiplier for the muP init
-         skip_mup=False
+         skip_mup=False,
+         out_factor=1                 # Logit multiplier in the model
        ):
 
     """
@@ -122,7 +125,7 @@ def go(
     """
 
     # Compute some values that should be logger to wandb
-    width = heads * width_per_head
+    width = wfactor * width_per_step
     depth = get_depth(width)
 
     source_microbatch_size = int(round(target_microbatch_size * source_batch_mult))
@@ -154,7 +157,10 @@ def go(
     print('depth:', depth, ', width: ', width)
 
     # Target for training
-    model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, num_tokens=NUM_TOKENS, nosqrt=True)
+
+    heads = max(width//width_per_head, min_heads)
+    assert width % heads == 0
+    model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, num_tokens=NUM_TOKENS, nosqrt=True, output_mult=out_factor)
 
     if torch.cuda.is_available():
         model.cuda()
@@ -162,11 +168,9 @@ def go(
         model = torch.nn.DataParallel(model)
 
     if not skip_mup:
-        opt = model.mup(base_lr=base_lr, width0=heads0 * width_per_head, factor=init_factor)
+        opt = model.mup(base_lr=base_lr, width0=width0, factor=init_factor)
         print(opt)
     else:
-        # DEBUG
-        _ = model.mup(base_lr=base_lr, width0=heads0 * width_per_head, factor=init_factor)
         opt = torch.optim.Adam(lr=base_lr, params=model.parameters())
 
     if warmup > 0:
