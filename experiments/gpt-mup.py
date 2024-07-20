@@ -70,7 +70,7 @@ def get_depth(width):
 
 def go(
          wfactor : int,               # Scaling step for the width (steps of 64)
-         width_per_step=64,
+         width_per_step=128,
          min_heads=32,                # minimum nr of heads
          width_per_head=128,          # dimension per head (above the minimum)
          context=512,
