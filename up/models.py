@@ -363,6 +363,7 @@ class GTransformer(nn.Module):
         :param width0:
         :param optcls: Class for the optimizer to return (note that the current scaling applies to Adam and some variants, but not to SGD)
         :param make_opt: Create and return an muP optimizer.
+        :param factor: A multiplier for the base initialization standard deviation (this is the sqrae root of the sigmas in the paper).
         :return: A muP optimizer if requested, else nothing.
         """
 
@@ -371,11 +372,11 @@ class GTransformer(nn.Module):
             widthscale = self.emb / width0
 
             baseparms = []  # Parameters for which the base learning rate transfers directly
-            scaleparms = [] # Parameters for which the base learning rate is scaled by 1 / fan_in
+            scaleparms = [] # Parameters for which the base learning rate is scaled by 1 / emb
 
             # - Input matrices token and pos embeddings. These are not scaled.
             baseparms.extend(self.token_embedding.parameters())
-            scaleparms.extend(self.pos_embedding.parameters())
+            baseparms.extend(self.pos_embedding.parameters())
 
         # - Trf blocks
         for block in self.tblocks:
@@ -387,7 +388,7 @@ class GTransformer(nn.Module):
 
             # SA weights and biases
             for lin in (block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
-                nn.init.normal_(lin.weight, mean=0.0, std=(factor/lin.in_features)**0.5)
+                nn.init.normal_(lin.weight, mean=0.0, std=factor * (1/lin.in_features)**0.5)
                 if lin.bias is not None:
                     nn.init.constant_(lin.bias, 0.0)
                     # nn.init.normal_(lin.bias, mean=0.0, std=ff_mult)
@@ -403,20 +404,24 @@ class GTransformer(nn.Module):
             # FF weights and biases
             for mod in block.ff:
                 if type(mod) == nn.Linear:
-                    nn.init.normal_(mod.weight, mean=0.0, std=(factor/mod.in_features)**0.5)
+                    nn.init.normal_(mod.weight, mean=0.0, std=factor * (1/mod.in_features)**0.5)
                     if mod.bias is not None:
                         nn.init.constant_(mod.bias, val=0.0)
                         # nn.init.normal_(mod.bias, mean=0.0, std=ff_mult)
 
-            if make_opt:
-                scaleparms.extend(block.ff.parameters())
+                    if make_opt:
+                        if mod.in_features == self.emb:
+                            scaleparms.extend(mod.parameters())
+                        else:
+                            assert mod.in_features == 4 * self.emb
+                            scaleparms.extend(mod.parameters())
 
         # - Output head
-        nn.init.normal_(self.toprobs.weight, mean=0.0, std=((factor**0.5) / self.emb) ) # NB. We scale by variance 1/emb^2, so std 1/emb
+        nn.init.normal_(self.toprobs.weight, mean=0.0, std=factor * (1/ self.emb) ) # NB. We scale by variance 1/emb^2, so std 1/emb
         nn.init.constant_(self.toprobs.bias, val=0.0)
 
         if make_opt:
-            scaleparms.extend(self.toprobs.parameters())
+            baseparms.extend(self.toprobs.parameters())
 
             return optcls([
                 {'params': baseparms},
