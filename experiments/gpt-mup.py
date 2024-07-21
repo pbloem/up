@@ -86,7 +86,7 @@ def go(
          base_lr=3e-4,                # Base learning rate at width0
          debug=False,
          warmup=100_000,
-         eval_every=5_000,            # How often (in microbatches) to evaluate
+         eval_every=500_000,            # How often (in microbatches) to evaluate
          print_every=500,             # How often to print the source output
          gc=1.0,                      # Gradient clipping.
          eval_samples=10_000,         # On how many samples to evaluate
