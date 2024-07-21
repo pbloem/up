@@ -333,6 +333,8 @@ def go(
                 'learning_rate (scaled)': opt.param_groups[1]['lr'],
             }, step=instances_seen)
 
+        wandb.log({}, step=instances_seen, commit=True)
+
         bar.set_postfix({'loss': f'{rloss.item():.02}'})
 
         if mbwarmup > 0 and mbraw < macrobatch_size:
