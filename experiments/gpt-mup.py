@@ -136,7 +136,7 @@ def go(
 
     wd = wandb.init(
         name=name,
-        project='up',
+        project='up-scaling',
         config=locals(),
         mode= 'disabled' if debug else 'online'
     )
@@ -169,7 +169,6 @@ def go(
 
     if not skip_mup:
         opt = model.mup(base_lr=base_lr, width0=width0, factor=init_factor)
-        print(opt)
     else:
         opt = torch.optim.Adam(lr=base_lr, params=model.parameters())
 
@@ -181,6 +180,8 @@ def go(
             g['lr_delta'] = g['lr'] / warmup
 
             g['lr'] = 0.0
+
+    print(opt)
 
     cmp_source = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nonlinearity), mask_channel=True)
 
@@ -203,9 +204,12 @@ def go(
     else:
         mbraw = macrobatch_size
 
+    instances_seen = 0
+    last_eval = float('-inf')
+
     for i in (bar := trange(batches)):
 
-        if eval_every > 0 and i % eval_every == 0 and not skip_eval:
+        if instances_seen - last_eval > eval_every and not skip_eval:
 
             for name, data in datasets.items():
                 print(f'evaluating {name}')
@@ -220,7 +224,9 @@ def go(
                         model_produces_logits=True
                     )
 
-                wandb.log({f'val-{name}': est})
+                wandb.log({f'val-{name}': est}, step=instances_seen)
+
+            last_eval = instances_seen
 
         # Sample noise from a random model and insert into the buffer
         tic()
@@ -297,7 +303,7 @@ def go(
             wandb.log({
                 'gradient_norm': gn,
                 'accumulated': accumulated # Sanity check.
-            })
+            }, step=instances_seen)
 
             scaler.step(opt)
             scaler.update()
@@ -315,17 +321,17 @@ def go(
             'train_time': traintime,
             'pre-training': 1.0,
             'mbraw': mbraw
-        })
+        }, step=instances_seen)
 
         if skip_mup:
             wandb.log({
                 'learning_rate (stable)': opt.param_groups[0]['lr'],
-            })
+            }, step=instances_seen)
         else:
             wandb.log({
                 'learning_rate (stable)': opt.param_groups[0]['lr'],
                 'learning_rate (scaled)': opt.param_groups[1]['lr'],
-            })
+            }, step=instances_seen)
 
         bar.set_postfix({'loss': f'{rloss.item():.02}'})
 
@@ -341,6 +347,8 @@ def go(
 
             print('target samples', i)
             print_batch(batch[:4, :], False)
+
+        instances_seen += batch.size(0)
 
 def throughput(fr=3, to=12, context=512, samples=40, burn_in=10, width_per_head=128):
     """
