@@ -224,7 +224,7 @@ def go(
                         model_produces_logits=True
                     )
 
-                wandb.log({f'val-{name}': est}, step=instances_seen)
+                wandb.log({f'val/{name}': est}, step=instances_seen)
 
             last_eval = instances_seen
 
