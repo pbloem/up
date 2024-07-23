@@ -108,6 +108,7 @@ def go(
          skip_mup=False,
          out_factor=1,                 # Logit multiplier in the model
          weight_decay=0.0,             # weight decay
+         sqrt_attn_scale=False,        # Use the original sqrt attention scaling
        ):
 
     """
@@ -161,7 +162,8 @@ def go(
     print('depth:', depth, ', width: ', width)
 
     # Target for training
-    model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, num_tokens=NUM_TOKENS, nosqrt=True, output_mult=out_factor)
+    model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context,
+                            num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor)
 
     if torch.cuda.is_available():
         model.cuda()
