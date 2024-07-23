@@ -107,7 +107,7 @@ def go(
          init_factor=1,               # Multiplier for the muP init
          skip_mup=False,
          out_factor=1,                 # Logit multiplier in the model
-         wd=0.0,                       # weight decay
+         weight_decay=0.0,             # weight decay
        ):
 
     """
@@ -171,7 +171,11 @@ def go(
     if not skip_mup:
         opt = model.mup(base_lr=base_lr, width0=width0, factor=init_factor, optcls=torch.optim.AdamW)
     else:
+        print(wd, type(wd))
         opt = torch.optim.AdamW(lr=base_lr, params=model.parameters(), weight_decay=wd)
+
+        print(opt)
+        exit()
 
     if warmup > 0:
         # warmup = warmup / accumulate
