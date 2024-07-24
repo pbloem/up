@@ -110,6 +110,7 @@ def go(
          weight_decay=0.0,             # weight decay
          sqrt_attn_scale=False,        # Use the original sqrt attention scaling
          source_wfactor=None,          # Width factor of the source model (if None, the same as the target)
+         source_microbatch_size=None,
        ):
 
     """
@@ -131,7 +132,8 @@ def go(
     width = wfactor * width_per_step
     depth = get_depth(width)
 
-    source_microbatch_size = int(round(target_microbatch_size * source_batch_mult))
+    if source_microbatch_size is None:
+        source_microbatch_size = int(round(target_microbatch_size * source_batch_mult))
     buffer_size = int(round(source_microbatch_size * buffer_size_mult))
 
     heads = max(width//width_per_head, min_heads)
