@@ -109,6 +109,7 @@ def go(
          out_factor=1,                 # Logit multiplier in the model
          weight_decay=0.0,             # weight decay
          sqrt_attn_scale=False,        # Use the original sqrt attention scaling
+         source_wfactor=None,          # Width factor of the source model (if None, the same as the target)
        ):
 
     """
@@ -134,6 +135,11 @@ def go(
     buffer_size = int(round(source_microbatch_size * buffer_size_mult))
 
     heads = max(width//width_per_head, min_heads)
+    assert width % heads == 0
+
+    swidth = width if source_wfactor is None else width_per_step * source_wfactor
+    sdepth =get_depth(swidth)
+    sheads = max(swidth//width_per_head, min_heads)
     assert width % heads == 0
 
     wd = wandb.init(
@@ -186,7 +192,7 @@ def go(
 
     print(opt)
 
-    cmp_source = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nonlinearity), mask_channel=True)
+    cmp_source = up.GTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nonlinearity), mask_channel=True)
 
     if torch.cuda.is_available():
         cmp_source.cuda()
