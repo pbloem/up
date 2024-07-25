@@ -295,7 +295,7 @@ def go(
         with torch.cuda.amp.autocast():
             output = model(input)
             rloss = F.cross_entropy(output.transpose(2, 1), target, reduction='sum')
-            loss = rloss / (input.size(1) * mbraw)
+            loss = rloss / input.size(1)
             # divide out the time, but sum over the instances
 
         scaler.scale(loss).backward()
@@ -303,13 +303,14 @@ def go(
 
         if accumulated >= mbraw: # perform a step
 
+            scaler.unscale_(opt)
+
             # scale the gradients to average over the macrobatch
             # -- here we divide out the instances
-            # for parm in model.parameters():
-            #     parm.grad /= accumulated
+            for parm in model.parameters():
+                parm.grad /= accumulated
 
             gn = gradient_norm(model)
-
             if gc > 0.0:
                 nn.utils.clip_grad_norm_(model.parameters(), gc)
 
