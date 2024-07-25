@@ -69,7 +69,7 @@ def get_depth(width):
     return int(round( (math.log(width) - a) / b ))
 
 def go(
-         wfactor : int,               # Scaling step for the width (steps of 64)
+         width : int,               # Scaling step for the width (steps of 64)
          width_per_step=128,
          min_heads=32,                # minimum nr of heads
          width_per_head=128,          # dimension per head (above the minimum)
@@ -109,7 +109,7 @@ def go(
          out_factor=1,                 # Logit multiplier in the model
          weight_decay=0.0,             # weight decay
          sqrt_attn_scale=False,        # Use the original sqrt attention scaling
-         source_wfactor=None,          # Width factor of the source model (if None, the same as the target)
+         source_width=None,          # Width factor of the source model (if None, the same as the target)
          source_microbatch_size=None,
        ):
 
@@ -129,7 +129,7 @@ def go(
     """
 
     # Compute some values that should be logger to wandb
-    width = wfactor * width_per_step
+    # width = wfactor * width_per_step
     depth = get_depth(width)
 
     if source_microbatch_size is None:
@@ -139,7 +139,7 @@ def go(
     heads = max(width//width_per_head, min_heads)
     assert width % heads == 0
 
-    swidth = width if source_wfactor is None else width_per_step * source_wfactor
+    swidth = width if source_width is None else width_per_step * source_width
     sdepth =get_depth(swidth)
     sheads = max(swidth//width_per_head, min_heads)
     assert width % heads == 0
