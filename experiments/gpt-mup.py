@@ -330,7 +330,7 @@ def go(
         traintime = toc()
 
         wandb.log({
-            'loss': rloss.item(),
+            'loss': loss.item() / input.size(0),
             'sample_time': sampletime,
             'train_time': traintime,
             'pre-training': 1.0,
