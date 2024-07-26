@@ -104,6 +104,7 @@ def go(
          dp = False,                  # Use data-parallel (multi GPU)
          mbwarmup = 100_000,          # Accumulation warmup (in instances)
          mb_min = 16,                 # Minimum microbatch size to start warming up from.
+         mb_start = 100_000,          # Number of instances to wait before starting the warmup
          old_init=False,
          init_factor=1,               # Multiplier for the muP init
          skip_mup=False,
@@ -356,7 +357,7 @@ def go(
 
         bar.set_postfix({'loss': f'{rloss.item():.02}'})
 
-        if mbwarmup > 0 and mbraw < macrobatch_size:
+        if mbwarmup > 0 and mbraw < macrobatch_size and instances_seen > mb_start:
             mbraw += mbdelta * batch.size(0)
 
         if warmup > 0:
