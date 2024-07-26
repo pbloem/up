@@ -211,7 +211,7 @@ def go(
 
     accumulated = 0 # nr of instances accumulated currently
     if mbwarmup > 0:
-        mbraw = target_microbatch_size # macrobatch size as a float
+        mbraw = mb_min # macrobatch size as a float
         mbdelta = (macrobatch_size - mb_min) / mbwarmup
     else:
         mbraw = macrobatch_size
