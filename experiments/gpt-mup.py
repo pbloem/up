@@ -103,6 +103,7 @@ def go(
          cp_every = 100_000,          # Save a checkpoint for the model every n batches.
          dp = False,                  # Use data-parallel (multi GPU)
          mbwarmup = 100_000,          # Accumulation warmup (in instances)
+         mb_min = 16,                 # Minimum microbatch size to start warming up from.
          old_init=False,
          init_factor=1,               # Multiplier for the muP init
          skip_mup=False,
@@ -211,7 +212,7 @@ def go(
     accumulated = 0 # nr of instances accumulated currently
     if mbwarmup > 0:
         mbraw = target_microbatch_size # macrobatch size as a float
-        mbdelta = (macrobatch_size - target_microbatch_size) / mbwarmup
+        mbdelta = (macrobatch_size - mb_min) / mbwarmup
     else:
         mbraw = macrobatch_size
 
@@ -283,7 +284,11 @@ def go(
         tic()
         # Perform a training step on batches sampled from the buffer
 
-        iz = random.sample(range(buffer_size), target_microbatch_size)
+        bs = min(int(round(mbraw)), target_microbatch_size)
+        # If the current macrobatch sizer is smaller than the microbatch size, we go with the smaller value
+        # (i.e. we leave memory empty).
+
+        iz = random.sample(range(buffer_size), bs)
 
         batch = buffer[iz, :]
         if torch.cuda.is_available():
