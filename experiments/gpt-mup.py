@@ -95,7 +95,6 @@ def go(
          weight_multb=1,              # multiplier for the weights (grp 2) of the source model
          source_mask=False,           # Whether to apply masking to the source model
          mask_prob_max=0.7,
-         nonlinearity='relu',
          skip_eval=False,             # Whether to skip the evaluation
          eval_ood=True,               # Whether to evaluate on OOD datasets
          name=None,                   # WandB name
@@ -175,7 +174,7 @@ def go(
     if nl is None or nl == 'relu':
         nl = torch.relu
     elif nl == 'gelu':
-        torch.nn.functional.gelu
+        nl = torch.nn.functional.gelu
     else:
         raise
     # Target for training
