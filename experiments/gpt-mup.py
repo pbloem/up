@@ -44,6 +44,9 @@ def nl(name : str):
     if name == 'relu':
         return torch.relu
 
+    if name == 'gelu':
+        return torch.nn.functional.gelu
+
     if name == 'sign':
         return torch.sign
 
@@ -112,8 +115,9 @@ def go(
          sqrt_attn_scale=False,        # Use the original sqrt attention scaling
          source_width=None,          # Width factor of the source model (if None, the same as the target)
          source_microbatch_size=None,
-         nl=None
-       ):
+         nl_source='relu',
+         nl_target='relu',
+):
 
     """
     Scaling experiment. Uses Levine 2021 to get the depth/width and Yang 2022 to scale the lr and initialization.
@@ -171,14 +175,8 @@ def go(
 
     print('depth:', depth, ', width: ', width)
 
-    if nl is None or nl == 'relu':
-        nl = torch.relu
-    elif nl == 'gelu':
-        nl = torch.nn.functional.gelu
-    else:
-        raise
     # Target for training
-    model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, nl=nl,
+    model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, nl=nl(nl_target),
                             num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor)
 
     if torch.cuda.is_available():
@@ -202,7 +200,7 @@ def go(
 
     print(opt)
 
-    cmp_source = up.GTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nonlinearity), mask_channel=True)
+    cmp_source = up.GTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nl_source), mask_channel=True)
 
     if torch.cuda.is_available():
         cmp_source.cuda()
