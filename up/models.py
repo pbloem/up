@@ -356,7 +356,8 @@ class GTransformer(nn.Module):
 
         return x
 
-    def mup(self, base_lr, width0, optcls=torch.optim.Adam, make_opt=True, factor=1, factor_out=1, weight_decay=0.0):
+    def \
+            mup(self, base_lr, width0, optcls=torch.optim.Adam, make_opt=True, factor=1, factor_out=1, weight_decay=0.0):
         """
         Implements the muP parametrization of Yang 2022. Re-inits all weights, and returns an Adam optimizer with the
         required learning rates per weight group.

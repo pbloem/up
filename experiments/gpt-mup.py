@@ -113,6 +113,7 @@ def go(
          sqrt_attn_scale=False,        # Use the original sqrt attention scaling
          source_width=None,          # Width factor of the source model (if None, the same as the target)
          source_microbatch_size=None,
+         nl=None
        ):
 
     """
@@ -171,8 +172,14 @@ def go(
 
     print('depth:', depth, ', width: ', width)
 
+    if nl is None or nl == 'relu':
+        nl = torch.relu
+    elif nl == 'gelu':
+        torch.nn.functional.gelu
+    else:
+        raise
     # Target for training
-    model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context,
+    model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, nl=nl,
                             num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor)
 
     if torch.cuda.is_available():
