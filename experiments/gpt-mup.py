@@ -110,13 +110,14 @@ def go(
          old_init=False,
          init_factor=1,               # Multiplier for the muP init
          skip_mup=False,
-         out_factor=1,                 # Logit multiplier in the model
-         weight_decay=0.0,             # weight decay
-         sqrt_attn_scale=False,        # Use the original sqrt attention scaling
-         source_width=None,          # Width factor of the source model (if None, the same as the target)
+         out_factor=1,                # Logit multiplier in the model
+         weight_decay=0.0,            # weight decay
+         sqrt_attn_scale=False,       # Use the original sqrt attention scaling
+         source_width=None,           # Width factor of the source model (if None, the same as the target)
          source_microbatch_size=None,
          nl_source='relu',
          nl_target='relu',
+         kqnorm=False
 ):
 
     """
@@ -177,7 +178,7 @@ def go(
 
     # Target for training
     model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, nl=nl(nl_target),
-                            num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor)
+                            num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor, kqnorm=kqnorm)
 
     if torch.cuda.is_available():
         model.cuda()

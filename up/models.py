@@ -304,7 +304,7 @@ class GTransformer(nn.Module):
     """
 
     def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False,
-                 autoregressive=True, dropout=0.1, nosqrt=False, output_mult=1):
+                 autoregressive=True, dropout=0.1, nosqrt=False, output_mult=1, kqnorm=False):
         """
 
         :param emb:
@@ -333,7 +333,11 @@ class GTransformer(nn.Module):
         for _ in range(depth):
             tblocks.append(
                 TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl,
-                                 dropout=dropout, sa_kwargs={'scalefactor': 1/(emb/heads) if nosqrt else 1/math.sqrt(emb/heads) })
+                                 dropout=dropout, sa_kwargs={
+                                    'scalefactor': 1/(emb/heads) if nosqrt else 1/math.sqrt(emb/heads),
+                                    'kqnorm': kqnorm
+                                }
+                )
             )
 
         self.tblocks = nn.ModuleList(modules=tblocks)
@@ -390,6 +394,11 @@ class GTransformer(nn.Module):
             if make_opt:
                 baseparms.extend(block.norm1.parameters())
                 baseparms.extend(block.norm2.parameters())
+
+                if hasattr(block.attention, 'kln'):
+                    baseparms.extend(block.attention.kln.parameters())
+                if hasattr(block.attention, 'qln'):
+                    baseparms.extend(block.attention.qln.parameters())
 
             # SA weights and biases
             for lin in (block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
