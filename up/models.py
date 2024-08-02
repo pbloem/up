@@ -412,8 +412,10 @@ class GTransformer(nn.Module):
                 # -- It's not entirely clear from the muP paper how to init the biases, but their code sets them to 0.
                 #    This is also what happens in eqs 3 and 4
 
-            if make_opt:
-                scaleparms.extend(block.attention.parameters())
+                if make_opt:
+                    scaleparms.extend(lin.parameters())
+
+                # scaleparms.extend(block.attention.parameters())
 
             # FF weights and biases
             for mod in block.ff:
