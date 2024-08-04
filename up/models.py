@@ -52,7 +52,6 @@ class TransformerBlock(nn.Module):
 
         return x
 
-
 class VAE(nn.Module):
     """
     VAE designed specifically for the MNIST resolution (28, 28), though in color.
@@ -296,7 +295,6 @@ class AE(nn.Module):
         res = out * mask + img * (1-mask)
 
         return res
-
 
 class GTransformer(nn.Module):
     """
