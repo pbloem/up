@@ -123,7 +123,8 @@ def go(
          teacher_alpha=0.5,
          twidth=384,
          tout_factor=32,
-         distill_cd=100_000           # Over how many instances to cool down the distillation factor (linearly)
+         distill_cd=100_000,          # Over how many instances to cool down the distillation factor (linearly)
+         depth_factor=1.0             # Scale the depth by this amount
 ):
 
     """
@@ -144,6 +145,9 @@ def go(
     # Compute some values that should be logger to wandb
     # width = wfactor * width_per_step
     depth = get_depth(width)
+
+    if depth_factor != 1.0:
+        depth = int(depth * depth_factor)
 
     if source_microbatch_size is None:
         source_microbatch_size = int(round(target_microbatch_size * source_batch_mult))
