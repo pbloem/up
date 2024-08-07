@@ -122,7 +122,8 @@ def go(
          load_teacher=None,
          teacher_alpha=0.5,
          twidth=384,
-         tout_factor=32
+         tout_factor=32,
+         distill_cd=100_000           # Over how many instances to cool down the distillation factor (linearly)
 ):
 
     """
@@ -229,6 +230,8 @@ def go(
                                      mask_channel=False)
         teacher.load_state_dict(loaded['model_state_dict'])
         print('Teacher loaded.')
+
+        distill_delta = teacher_alpha / distill_cd
 
     buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device=d())
 
@@ -337,19 +340,23 @@ def go(
         input  = batch[:, :-1]
         target = batch[:, 1:]
 
+
+
         with torch.cuda.amp.autocast():
             output = model(input)
             rloss = F.cross_entropy(output.transpose(2, 1), target, reduction='sum')
 
-            if teacher is not None:
+            loss = (rloss / input.size(1))
+
+            if teacher is not None and teacher_alpha > 0.0:
                 with torch.no_grad():
-                    teacher_out = teacher(model)
+                    teacher_out = teacher(input)
 
                 tloss = F.cross_entropy(output.transpose(2, 1), teacher_out.softmax().transpose(2, 1), reduction='sum')
-            else:
-                tloss = 0.0
 
-        loss = (rloss / input.size(1)) + teacher_alpha * (tloss / input.size(1))
+                loss = loss + teacher_alpha * (tloss / input.size(1))
+
+
         # divide out the time, but sum over the instances
 
         scaler.scale(loss).backward()
@@ -417,6 +424,9 @@ def go(
 
             print('target samples', i)
             print_batch(batch[:4, :], False)
+
+        if teacher is not None and teacher_alpha > 0.0:
+            teacher_alpha -= distill_delta
 
         instances_seen += batch.size(0)
 
