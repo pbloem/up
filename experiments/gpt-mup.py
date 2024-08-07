@@ -353,7 +353,7 @@ def go(
                 with torch.no_grad():
                     teacher_out = teacher(input)
 
-                tloss = F.cross_entropy(output.transpose(2, 1), teacher_out.softmax().transpose(2, 1), reduction='sum')
+                tloss = F.cross_entropy(output.transpose(2, 1), teacher_out.softmax(dim=-1).transpose(2, 1), reduction='sum')
 
                 loss = loss + teacher_alpha * (tloss / input.size(1))
 
