@@ -118,7 +118,9 @@ def go(
          nl_source='relu',
          nl_target='relu',
          kqnorm=False,
-         save_to=None
+         save_to=None,
+         load_teacher=None,
+         teacher_alpha=0.5,
 ):
 
     """
@@ -210,6 +212,12 @@ def go(
     if dp:
         cmp_source = torch.nn.DataParallel(cmp_source)
 
+    # Load teacher model (if specified)
+    teacher = None
+    if load_teacher:
+        loaded = torch.load(load_teacher, map_location=d())
+        teacher = loaded['model_state_dict']
+
     buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device=d())
 
     sampletime = -1.0
@@ -232,10 +240,14 @@ def go(
 
             if save_to is not None:
                 print(f'Saving model at {i} instances.')
-                torch.save({
-                    'model_state_dict': model.state_dict(),
-                    'optimizer_state_dict': opt.state_dict(),
-                }, save_to.format(i))
+                # torch.save({
+                #     'model_state_dict': model.state_dict(),
+                #     'optimizer_state_dict': opt.state_dict(),
+                # }, save_to.format(i))
+
+                torch.save(model, save_to.format(i))
+                # Save just the model. This is a bit brittle to code changes, but doesn't require us to save the
+                # hyperparams manually
 
         if instances_seen - last_eval > eval_every and not skip_eval:
 
@@ -316,8 +328,18 @@ def go(
         with torch.cuda.amp.autocast():
             output = model(input)
             rloss = F.cross_entropy(output.transpose(2, 1), target, reduction='sum')
-            loss = rloss / input.size(1)
-            # divide out the time, but sum over the instances
+
+            if teacher is not None:
+                with torch.no_grad():
+                    teacher_out = teacher(model)
+
+                tloss = F.cross_entropy(output.transpose(2, 1), teacher_out.softmax().transpose(2, 1), reduction='sum')
+            else:
+                tloss = 0.0
+
+
+        loss = rloss / input.size(1) + teacher_alpha * tloss / input.size(1)
+        # divide out the time, but sum over the instances
 
         scaler.scale(loss).backward()
         accumulated += input.size(0)
