@@ -337,8 +337,7 @@ def go(
             else:
                 tloss = 0.0
 
-
-        loss = rloss / input.size(1) + teacher_alpha * tloss / input.size(1)
+        loss = (rloss / input.size(1)) + teacher_alpha * (tloss / input.size(1))
         # divide out the time, but sum over the instances
 
         scaler.scale(loss).backward()
