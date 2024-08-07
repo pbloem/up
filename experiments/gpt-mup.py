@@ -229,6 +229,9 @@ def go(
                                      nl=nl(tnl), nosqrt=not sqrt_attn_scale, output_mult=tout_factor, kqnorm=False,
                                      mask_channel=False)
         teacher.load_state_dict(loaded['model_state_dict'])
+        if torch.cuda.is_available():
+            teacher.cuda()
+
         print('Teacher loaded.')
 
         distill_delta = teacher_alpha / distill_cd
