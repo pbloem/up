@@ -430,7 +430,7 @@ def go(
             print_batch(batch[:4, :], False)
 
         if teacher is not None and teacher_alpha > 0.0:
-            teacher_alpha -= distill_delta
+            teacher_alpha -= distill_delta * batch.size(0)
 
         instances_seen += batch.size(0)
 
