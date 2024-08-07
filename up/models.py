@@ -302,7 +302,7 @@ class GTransformer(nn.Module):
     """
 
     def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False,
-                 autoregressive=True, dropout=0.1, nosqrt=False, output_mult=1, kqnorm=False):
+                 autoregressive=True, dropout=0.1, nosqrt=False, output_mult=1, kqnorm=False, attn_factor=1.0):
         """
 
         :param emb:
@@ -332,7 +332,7 @@ class GTransformer(nn.Module):
             tblocks.append(
                 TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl,
                                  dropout=dropout, sa_kwargs={
-                                    'scalefactor': 1/(emb/heads) if nosqrt else 1/math.sqrt(emb/heads),
+                                    'scalefactor': attn_factor/(emb/heads) if nosqrt else attn_factor/math.sqrt(emb/heads),
                                     'kqnorm': kqnorm
                                 }
                 )

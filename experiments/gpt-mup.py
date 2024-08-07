@@ -113,6 +113,7 @@ def go(
          out_factor=1,                # Logit multiplier in the model
          weight_decay=0.0,            # weight decay
          sqrt_attn_scale=False,       # Use the original sqrt attention scaling
+         attn_factor=1.0,             # additional scaling factor for the attention weight (pre-softmax)
          source_width=None,           # Width factor of the source model (if None, the same as the target)
          source_microbatch_size=None,
          nl_source='relu',
@@ -188,7 +189,8 @@ def go(
 
     # Target for training
     model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, nl=nl(nl_target),
-                            num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor, kqnorm=kqnorm)
+                            num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor, kqnorm=kqnorm,
+                            attn_factor=attn_factor)
 
     if torch.cuda.is_available():
         model.cuda()
