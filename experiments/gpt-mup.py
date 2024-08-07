@@ -218,7 +218,7 @@ def go(
     # Load teacher model (if specified)
     teacher = None
     if load_teacher:
-        loaded = torch.load(load_teacher, map_location=d())
+        loaded = torch.load(load_teacher) #, map_location=d())
 
         tdepth = get_depth(twidth)
         theads = max(twidth//width_per_head, min_heads)
@@ -339,8 +339,6 @@ def go(
 
         input  = batch[:, :-1]
         target = batch[:, 1:]
-
-
 
         with torch.cuda.amp.autocast():
             output = model(input)
