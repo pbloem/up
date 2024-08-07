@@ -121,6 +121,8 @@ def go(
          save_to=None,
          load_teacher=None,
          teacher_alpha=0.5,
+         twidth=384,
+         tout_factor=32
 ):
 
     """
@@ -216,7 +218,17 @@ def go(
     teacher = None
     if load_teacher:
         loaded = torch.load(load_teacher, map_location=d())
-        teacher = loaded['model_state_dict']
+
+        tdepth = get_depth(twidth)
+        theads = max(twidth//width_per_head, min_heads)
+        tnl = nl_target
+        tcontext = context
+
+        teacher = up.GTransformer(emb=twidth, heads=theads, depth=tdepth, seq_length=tcontext, num_tokens=NUM_TOKENS,
+                                     nl=nl(tnl), nosqrt=not sqrt_attn_scale, output_mult=tout_factor, kqnorm=False,
+                                     mask_channel=False)
+        teacher.load_state_dict(loaded['model_state_dict'])
+        print('Teacher loaded.')
 
     buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device=d())
 
