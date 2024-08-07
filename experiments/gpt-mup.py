@@ -348,6 +348,7 @@ def go(
             rloss = F.cross_entropy(output.transpose(2, 1), target, reduction='sum')
 
             loss = (rloss / input.size(1))
+            # -- We divide out the time, but sum over the instances
 
             if teacher is not None and teacher_alpha > 0.0:
                 with torch.no_grad():
@@ -355,10 +356,12 @@ def go(
 
                 tloss = F.cross_entropy(output.transpose(2, 1), teacher_out.softmax(dim=-1).transpose(2, 1), reduction='sum')
 
+                wandb.log({
+                    'teacher_alpha': teacher_alpha,
+                    'teacher loss': tloss.item() / input.size(0)
+                })
+
                 loss = loss + teacher_alpha * (tloss / input.size(1))
-
-
-        # divide out the time, but sum over the instances
 
         scaler.scale(loss).backward()
         accumulated += input.size(0)
@@ -392,7 +395,7 @@ def go(
         traintime = toc()
 
         wandb.log({
-            'loss': loss.item() / input.size(0),
+            'loss': rloss.item() / input.size(0),
             'sample_time': sampletime,
             'train_time': traintime,
             'pre-training': 1.0,
