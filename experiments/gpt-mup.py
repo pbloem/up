@@ -358,7 +358,7 @@ def go(
 
                 wandb.log({
                     'teacher_alpha': teacher_alpha,
-                    'teacher loss': tloss.item() / input.size(0)
+                    'teacher loss': tloss.item() / (input.size(0) * input.size(1))
                 })
 
                 loss = loss + teacher_alpha * (tloss / input.size(1))
@@ -395,7 +395,7 @@ def go(
         traintime = toc()
 
         wandb.log({
-            'loss': rloss.item() / input.size(0),
+            'loss': rloss.item() / (input.size(0) * input.size(1)),
             'sample_time': sampletime,
             'train_time': traintime,
             'pre-training': 1.0,
