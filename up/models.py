@@ -402,7 +402,7 @@ class GTransformer(nn.Module):
         :return:
         """
         for i, block in enumerate(self.tblocks):
-            assert block.a
+            assert block.a is not None
             if check(i):
                 print(f'Unfreezing layer {i}.')
                 block.a.requires_grad = True
