@@ -372,8 +372,8 @@ class GTransformer(nn.Module):
         for i, block in enumerate(self.tblocks):
             if check(i):
                 for norm in (block.norm1, block.norm2):
-                    norm.weight.fill_(0.0)
                     norm.weight.requires_grad = False
+                    norm.weight.fill_(0.0)
 
     def unfreeze_layers(self, check):
         """
