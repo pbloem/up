@@ -122,7 +122,8 @@ def go(
          save_to=None,
          depth_factor=1.0,             # Scale the depth by this amount
          freeze_blocks = -1,           # Nr. of blocks to freeze/unfreeze (negative to skip freezing)
-         unfreeze_time = 100_000       # Number of instances to wait until unfreezing the next block
+         unfreeze_time = 100_000,      # Number of instances to wait until unfreezing the next block
+         loglayers = [1,18,22]
 ):
 
     """
@@ -386,6 +387,12 @@ def go(
                 'learning_rate (scaled)': opt.param_groups[1]['lr'],
             }, step=instances_seen)
 
+        if freeze_blocks >  0:
+            for i in loglayers:
+                wandb.log({
+                    f'sig(a) (layer {i})': torch.sigmoid(model.tblocks[i].a)
+                }, step=instances_seen)
+
         wandb.log({}, step=instances_seen, commit=True)
 
         bar.set_postfix({'loss': f'{rloss.item():.02}'})
@@ -404,12 +411,13 @@ def go(
             print_batch(batch[:4, :], False)
 
         if freeze_blocks >  0:
-            if (instances_seen/unfreeze_time) > (last_unfrozen / freeze_blocks):
-                print(f'{instances_seen=} unfreezing blocks from {last_unfrozen+1} to {last_unfrozen + freeze_blocks}.')
+            if last_unfrozen < depth:
+                if (instances_seen/unfreeze_time) > (last_unfrozen / freeze_blocks):
+                    print(f'{instances_seen=} unfreezing blocks from {last_unfrozen+1} to {last_unfrozen + freeze_blocks}.')
 
-                model.unfreeze_layers(lambda i : last_unfrozen + 1 <= i <= last_unfrozen + freeze_blocks)
+                    model.unfreeze_layers(lambda i : last_unfrozen + 1 <= i <= last_unfrozen + freeze_blocks)
 
-                last_unfrozen += freeze_blocks
+                    last_unfrozen += freeze_blocks
 
         instances_seen += batch.size(0)
 

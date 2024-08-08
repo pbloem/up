@@ -9,6 +9,8 @@ import random, math
 
 from .util import Reshape, kl_loss, vae_sample, coords, Lambda
 
+# Zero and one logits for the a multipler
+ZERO, ONE = -20, 20
 
 class TransformerBlock(nn.Module):
     """
@@ -39,7 +41,7 @@ class TransformerBlock(nn.Module):
         self.a = None
         if master_res:
             # Parameter for the master residual connection.
-            self.a = nn.Parameter(torch.tensor([1.0]))
+            self.a = nn.Parameter(torch.tensor([ONE]))
             # initially frozen
             self.a.requires_grad = False
 
@@ -60,10 +62,10 @@ class TransformerBlock(nn.Module):
         x = self.do(x)
 
         if self.a: # master residual connection
-            a = self.a.clip(0, 1)
+            a = torch.sigmoid(self.a) # self.a.clip(0, 1)
             return a * x + (1-a) * orig
             # -- Return a convex mixture of the input and the output. This allows us to effectively disable the layer by
-            #    setting a=0.0
+            #    setting a=-large_number
 
         return x
 
@@ -390,7 +392,7 @@ class GTransformer(nn.Module):
             if check(i):
                 print(f'Freezing layer {i}.')
                 block.a.requires_grad = False
-                block.a *= 0.0
+                block.a.fill_(ZERO)
 
     def unfreeze_layers(self, check):
         """
