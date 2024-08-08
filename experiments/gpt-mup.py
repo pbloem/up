@@ -123,7 +123,8 @@ def go(
          depth_factor=1.0,             # Scale the depth by this amount
          freeze_blocks = -1,           # Nr. of blocks to freeze/unfreeze (negative to skip freezing)
          unfreeze_time = 100_000,      # Number of instances to wait until unfreezing the next block
-         loglayers = [1,18,22]
+         loglayers = [1,18,22],
+         ainit=20.
 ):
 
     """
@@ -188,7 +189,7 @@ def go(
     # Target for training
     model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, nl=nl(nl_target),
                             num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor, kqnorm=kqnorm,
-                            attn_factor=attn_factor, master_res=True)
+                            attn_factor=attn_factor, master_res=True, init=ainit)
 
     if freeze_blocks > 0:
         model.freeze_layers(lambda i : i >= freeze_blocks)

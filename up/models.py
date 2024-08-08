@@ -9,16 +9,13 @@ import random, math
 
 from .util import Reshape, kl_loss, vae_sample, coords, Lambda
 
-# Zero and one logits for the a multipler
-ZERO, ONE = -20.0, 20.0
-
 class TransformerBlock(nn.Module):
     """
     A straightforward transformer block.
     """
 
     def __init__(self, emb, heads, mask, seq_length, ff_hidden_mult=4, dropout=0.1,
-                 pos_embedding=None, sa_kwargs={}, nl=torch.relu, master_res=False):
+                 pos_embedding=None, sa_kwargs={}, nl=torch.relu, master_res=False, init=20.0):
         super().__init__()
 
         self.nl = Lambda(lambda x : nl(x))
@@ -41,7 +38,7 @@ class TransformerBlock(nn.Module):
         self.a = None
         if master_res:
             # Parameter for the master residual connection.
-            self.a = nn.Parameter(torch.tensor([ONE]))
+            self.a = nn.Parameter(torch.tensor([init]))
             # initially frozen
             self.a.requires_grad = False
 
@@ -320,7 +317,7 @@ class GTransformer(nn.Module):
 
     def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False,
                  autoregressive=True, dropout=0.1, nosqrt=False, output_mult=1, kqnorm=False, attn_factor=1.0,
-                 master_res=False):
+                 master_res=False, init=20.0):
         """
 
         :param emb:
@@ -357,6 +354,7 @@ class GTransformer(nn.Module):
             )
 
         self.tblocks = nn.ModuleList(modules=tblocks)
+        self.init = init
 
     def forward(self, x, z=None):
         """
@@ -392,7 +390,7 @@ class GTransformer(nn.Module):
             if check(i):
                 print(f'Freezing layer {i}.')
                 block.a.requires_grad = False
-                block.a.fill_(ZERO)
+                block.a.fill_(-self.init)
 
     def unfreeze_layers(self, check):
         """
