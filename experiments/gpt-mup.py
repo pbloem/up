@@ -390,7 +390,7 @@ def go(
             for i in loglayers:
                 if type(model.tblocks[i]) is ProgTransformerBlock:
                     wandb.log({
-                        f'sig(a) (layer {i})': model.tblocks[i].a
+                        f'sig(a) (layer {i})': model.tblocks[i].a.item()
                     }, step=instances_seen)
 
         wandb.log({}, step=instances_seen, commit=True)
