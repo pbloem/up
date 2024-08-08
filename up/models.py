@@ -344,7 +344,7 @@ class GTransformer(nn.Module):
         self.toprobs = nn.Linear(emb, num_tokens + 1) if mask_channel else nn.Linear(emb, num_tokens)
 
         tblocks = []
-        tblocks.append(
+        tblocks.extend(
             TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl,
                              dropout=dropout, sa_kwargs={
                                 'scalefactor': attn_factor/(emb/heads) if nosqrt else attn_factor/math.sqrt(emb/heads),
@@ -352,7 +352,7 @@ class GTransformer(nn.Module):
                             }
             ) for _ in range(depth - num_progblocks)
         )
-        tblocks.append(
+        tblocks.extend(
             ProgTransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl,
                              dropout=dropout, sa_kwargs={
                                 'scalefactor': attn_factor/(emb/heads) if nosqrt else attn_factor/math.sqrt(emb/heads),
