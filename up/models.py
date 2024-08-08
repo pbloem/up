@@ -60,7 +60,7 @@ class TransformerBlock(nn.Module):
         x = self.do(x)
 
         if self.a: # master residual connection
-            a = self.clip(0, 1)
+            a = self.a.clip(0, 1)
             return a * x + (1-a) * orig
             # -- Return a convex mixture of the input and the output. This allows us to effectively disable the layer by
             #    setting a=0.0
