@@ -441,7 +441,7 @@ class GTransformer(nn.Module):
                 baseparms.extend(block.norm1.parameters())
                 baseparms.extend(block.norm2.parameters())
 
-                if block.a:
+                if block.a is not None:
                     baseparms.append(block.a)
 
                 if hasattr(block.attention, 'kln'):
