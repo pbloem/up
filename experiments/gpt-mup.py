@@ -346,7 +346,8 @@ def go(
             # scale the gradients to average over the macrobatch
             # -- here we divide out the instances
             for parm in model.parameters():
-                parm.grad /= accumulated
+                if parm.grad:
+                    parm.grad /= accumulated
 
             gn = gradient_norm(model)
             if gc > 0.0:
