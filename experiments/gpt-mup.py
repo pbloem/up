@@ -1,6 +1,7 @@
 import up
 from up.util import tic, toc, coords, d, sample, sample_sequence, gradient_norm
 from up.data import load_data, cas
+from up import ProgTransformerBlock
 
 from former.util import d, here, tic, toc, sample_batch, enwik8_string, enwik8_bytes, estimate_compression
 import former
@@ -387,9 +388,10 @@ def go(
 
         if freeze_blocks >  0:
             for i in loglayers:
-                wandb.log({
-                    f'sig(a) (layer {i})': torch.sigmoid(model.tblocks[i].a)
-                }, step=instances_seen)
+                if type(model.tblocks[i]) is ProgTransformerBlock:
+                    wandb.log({
+                        f'sig(a) (layer {i})': model.tblocks[i].a
+                    }, step=instances_seen)
 
         wandb.log({}, step=instances_seen, commit=True)
 
