@@ -390,7 +390,7 @@ class GTransformer(nn.Module):
             if check(i):
                 print(f'Freezing layer {i}.')
                 block.a.requires_grad = False
-                block.a = 0.0
+                block.a *= 0.0
 
     def unfreeze_layers(self, check):
         """
