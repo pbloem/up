@@ -10,7 +10,7 @@ import random, math
 from .util import Reshape, kl_loss, vae_sample, coords, Lambda
 
 # Zero and one logits for the a multipler
-ZERO, ONE = -20, 20
+ZERO, ONE = -20.0, 20.0
 
 class TransformerBlock(nn.Module):
     """
