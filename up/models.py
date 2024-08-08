@@ -15,7 +15,7 @@ class TransformerBlock(nn.Module):
     """
 
     def __init__(self, emb, heads, mask, seq_length, ff_hidden_mult=4, dropout=0.1,
-                 pos_embedding=None, sa_kwargs={}, nl=torch.relu, master_res=False, init=20.0):
+                 pos_embedding=None, sa_kwargs={}, nl=torch.relu):
         super().__init__()
 
         self.nl = Lambda(lambda x : nl(x))
@@ -35,16 +35,7 @@ class TransformerBlock(nn.Module):
 
         self.do = nn.Dropout(dropout)
 
-        self.a = None
-        if master_res:
-            # Parameter for the master residual connection.
-            self.a = nn.Parameter(torch.tensor([init]))
-            # initially frozen
-            self.a.requires_grad = False
-
     def forward(self, x):
-
-        orig = x
 
         attended = self.attention(x)
 
@@ -58,11 +49,21 @@ class TransformerBlock(nn.Module):
 
         x = self.do(x)
 
-        if self.a: # master residual connection
-            a = torch.sigmoid(self.a) # self.a.clip(0, 1)
-            return a * x + (1-a) * orig
-            # -- Return a convex mixture of the input and the output. This allows us to effectively disable the layer by
-            #    setting a=-large_number
+        return x
+
+class ProgTransformerBlock(TransformerBlock):
+
+    def __init__(self, *args, **kwargs):
+        super.__init__(*args, **kwargs)
+
+        self.a = nn.Parameter( torch.tensor([0.0]) )
+        self.enabled = False
+
+    def forward(self, x):
+
+        if self.enabled:
+            a = self.a.abs()
+            return x + a * super(x)
 
         return x
 
@@ -317,7 +318,7 @@ class GTransformer(nn.Module):
 
     def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False,
                  autoregressive=True, dropout=0.1, nosqrt=False, output_mult=1, kqnorm=False, attn_factor=1.0,
-                 master_res=False, init=20.0):
+                 num_progblocks=0):
         """
 
         :param emb:
@@ -343,18 +344,25 @@ class GTransformer(nn.Module):
         self.toprobs = nn.Linear(emb, num_tokens + 1) if mask_channel else nn.Linear(emb, num_tokens)
 
         tblocks = []
-        for _ in range(depth):
-            tblocks.append(
-                TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl,
-                                 dropout=dropout, master_res=master_res, init=init, sa_kwargs={
-                                    'scalefactor': attn_factor/(emb/heads) if nosqrt else attn_factor/math.sqrt(emb/heads),
-                                    'kqnorm': kqnorm
-                                }
-                )
-            )
+        tblocks.append(
+            TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl,
+                             dropout=dropout, sa_kwargs={
+                                'scalefactor': attn_factor/(emb/heads) if nosqrt else attn_factor/math.sqrt(emb/heads),
+                                'kqnorm': kqnorm
+                            }
+            ) for _ in range(depth - num_progblocks)
+        )
+        tblocks.append(
+            ProgTransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl,
+                             dropout=dropout, sa_kwargs={
+                                'scalefactor': attn_factor/(emb/heads) if nosqrt else attn_factor/math.sqrt(emb/heads),
+                                'kqnorm': kqnorm
+                            }
+            ) for _ in range(depth - num_progblocks)
+        )
+
 
         self.tblocks = nn.ModuleList(modules=tblocks)
-        self.init = init
 
     def forward(self, x, z=None):
         """
@@ -374,25 +382,7 @@ class GTransformer(nn.Module):
 
         return x
 
-    def freeze_layers(self, check):
-        """
-        Disables any layers for whose index i check(i) is true. This is done by setting the layer norm weights to 0.0
-        and setting its requires_grad to False.
-
-        This essentially forces all information to pass through the residual connection, turning the layer into the
-        identity function.
-
-        :param check:
-        :return:
-        """
-        for i, block in enumerate(self.tblocks):
-            assert block.a is not None
-            if check(i):
-                print(f'Freezing layer {i}.')
-                block.a.requires_grad = False
-                block.a.fill_(-self.init)
-
-    def unfreeze_layers(self, check):
+    def enable_layers(self, check):
         """
         Enables any layers for whose index i check(i) is true. This is done by setting requires_grad (back) to True for
         the layer norm weights. The value is kept at zero, so just after enabling, the block still computed the identity
@@ -402,10 +392,9 @@ class GTransformer(nn.Module):
         :return:
         """
         for i, block in enumerate(self.tblocks):
-            assert block.a is not None
-            if check(i):
-                print(f'Unfreezing layer {i}.')
-                block.a.requires_grad = True
+            if check(i) and type(block) == ProgTransformerBlock:
+                print(f'Enabling layer {i}.')
+                block.enabled = True
 
     def mup(self, base_lr, width0, optcls=torch.optim.Adam, make_opt=True, factor=1, factor_out=1, weight_decay=0.0):
         """
@@ -441,7 +430,7 @@ class GTransformer(nn.Module):
                 baseparms.extend(block.norm1.parameters())
                 baseparms.extend(block.norm2.parameters())
 
-                if block.a is not None:
+                if type(block) is ProgTransformerBlock:
                     baseparms.append(block.a)
 
                 if hasattr(block.attention, 'kln'):

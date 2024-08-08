@@ -121,10 +121,9 @@ def go(
          kqnorm=False,
          save_to=None,
          depth_factor=1.0,             # Scale the depth by this amount
-         freeze_blocks = -1,           # Nr. of blocks to freeze/unfreeze (negative to skip freezing)
-         unfreeze_time = 100_000,      # Number of instances to wait until unfreezing the next block
-         loglayers = [1,18,22],
-         ainit=20.
+         freeze_blocks=8,
+         unfreeze_time = 10_000,       # Number of instances to wait before unfreezing the pro
+         loglayers = [1,18,22]
 ):
 
     """
@@ -189,10 +188,8 @@ def go(
     # Target for training
     model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, nl=nl(nl_target),
                             num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor, kqnorm=kqnorm,
-                            attn_factor=attn_factor, master_res=True, init=ainit)
-
-    if freeze_blocks > 0:
-        model.freeze_layers(lambda i : i >= freeze_blocks)
+                            attn_factor=attn_factor, num_progblocks=max(depth - freeze_blocks, 0))
+    # -- Note: the first block of layers consists of regular blocks, the rest are prog blocks.
 
     if torch.cuda.is_available():
         model.cuda()
@@ -413,10 +410,10 @@ def go(
 
         if freeze_blocks >  0:
             if last_unfrozen < depth:
-                if (instances_seen/unfreeze_time) > (last_unfrozen / freeze_blocks):
+                if (instances_seen/unfreeze_time) > ((last_unfrozen+1) / freeze_blocks):
                     print(f'{instances_seen=} unfreezing blocks from {last_unfrozen+1} to {last_unfrozen + freeze_blocks}.')
 
-                    model.unfreeze_layers(lambda i : last_unfrozen + 1 <= i <= last_unfrozen + freeze_blocks)
+                    model.enable_layers(lambda i : last_unfrozen + 1 <= i <= last_unfrozen + freeze_blocks)
 
                     last_unfrozen += freeze_blocks
 
