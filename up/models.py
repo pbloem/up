@@ -63,7 +63,7 @@ class ProgTransformerBlock(TransformerBlock):
 
         if self.enabled:
             a = self.a.abs()
-            return x + a * super(x)
+            return x + a * super().forward(x)
 
         return x
 
