@@ -54,7 +54,7 @@ class TransformerBlock(nn.Module):
 class ProgTransformerBlock(TransformerBlock):
 
     def __init__(self, *args, **kwargs):
-        super.__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         self.a = nn.Parameter( torch.tensor([0.0]) )
         self.enabled = False
