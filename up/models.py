@@ -39,16 +39,12 @@ class TransformerBlock(nn.Module):
     def forward(self, x):
 
         attended = self.attention(x)
-
-        x = self.norm1(attended + x)
-
-        x = self.do(x)
+        attended = self.do(attended)
+        x = self.norm1(attended) + x
 
         fedforward = self.ff(x)
-
-        x = self.norm2(fedforward + x)
-
-        x = self.do(x)
+        fedforward = self.do(fedforward)
+        x = self.norm2(fedforward) + x
 
         return x
 
@@ -371,9 +367,11 @@ class GTransformer(nn.Module):
         """
         for i, block in enumerate(self.tblocks):
             if check(i):
+                print(f'Freezing layer {i}.')
                 for norm in (block.norm1, block.norm2):
                     norm.weight.requires_grad = False
                     norm.weight.fill_(0.0)
+
 
     def unfreeze_layers(self, check):
         """
@@ -386,6 +384,7 @@ class GTransformer(nn.Module):
         """
         for i, block in enumerate(self.tblocks):
             if check(i):
+                print(f'Unfreezing layer {i}.')
                 for norm in (block.norm1, block.norm2):
                     norm.weight.requires_grad = True
 
