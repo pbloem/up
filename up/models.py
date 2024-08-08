@@ -358,8 +358,38 @@ class GTransformer(nn.Module):
 
         return x
 
-    def \
-            mup(self, base_lr, width0, optcls=torch.optim.Adam, make_opt=True, factor=1, factor_out=1, weight_decay=0.0):
+    def freeze_layers(self, check):
+        """
+        Disables any layers for whose index i check(i) is true. This is done by setting the layer norm weights to 0.0
+        and setting its requires_grad to False.
+
+        This essentially forces all information to pass through the residual connection, turning the layer into the
+        identity function.
+
+        :param check:
+        :return:
+        """
+        for i, block in enumerate(self.tblocks):
+            if check(i):
+                for norm in (block.norm1, block.norm2):
+                    norm.weight.fill_(0.0)
+                    norm.weight.requires_grad = False
+
+    def unfreeze_layers(self, check):
+        """
+        Enables any layers for whose index i check(i) is true. This is done by setting requires_grad (back) to True for
+        the layer norm weights. The value is kept at zero, so just after enabling, the block still computed the identity
+        function, but it can now slowly begin to change under gradient descent.
+
+        :param check:
+        :return:
+        """
+        for i, block in enumerate(self.tblocks):
+            if check(i):
+                for norm in (block.norm1, block.norm2):
+                    norm.weight.requires_grad = True
+
+    def mup(self, base_lr, width0, optcls=torch.optim.Adam, make_opt=True, factor=1, factor_out=1, weight_decay=0.0):
         """
         Implements the muP parametrization of Yang 2022. Re-inits all weights, and returns an Adam optimizer with the
         required learning rates per weight group.

@@ -120,12 +120,9 @@ def go(
          nl_target='relu',
          kqnorm=False,
          save_to=None,
-         load_teacher=None,
-         teacher_alpha=0.5,
-         twidth=384,
-         tout_factor=32,
-         distill_cd=100_000,          # Over how many instances to cool down the distillation factor (linearly)
-         depth_factor=1.0             # Scale the depth by this amount
+         depth_factor=1.0,             # Scale the depth by this amount
+         freeze_blocks = -1,           # Nr. of blocks to freeze/unfreeze (negative to skip freezing)
+         unfreeze_time = 100_000       # Number of instances to wait until unfreezing the next block
 ):
 
     """
@@ -192,6 +189,9 @@ def go(
                             num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor, kqnorm=kqnorm,
                             attn_factor=attn_factor)
 
+    if freeze_blocks > 0:
+        model.freeze_layers(lambda i : i >= freeze_blocks)
+
     if torch.cuda.is_available():
         model.cuda()
     if dp:
@@ -221,27 +221,6 @@ def go(
     if dp:
         cmp_source = torch.nn.DataParallel(cmp_source)
 
-    # Load teacher model (if specified)
-    teacher = None
-    if load_teacher:
-        loaded = torch.load(load_teacher) #, map_location=d())
-
-        tdepth = get_depth(twidth)
-        theads = max(twidth//width_per_head, min_heads)
-        tnl = nl_target
-        tcontext = context
-
-        teacher = up.GTransformer(emb=twidth, heads=theads, depth=tdepth, seq_length=tcontext, num_tokens=NUM_TOKENS,
-                                     nl=nl(tnl), nosqrt=not sqrt_attn_scale, output_mult=tout_factor, kqnorm=False,
-                                     mask_channel=False)
-        teacher.load_state_dict(loaded['model_state_dict'])
-        if torch.cuda.is_available():
-            teacher.cuda()
-
-        print('Teacher loaded.')
-
-        distill_delta = teacher_alpha / distill_cd
-
     buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device=d())
 
     sampletime = -1.0
@@ -257,6 +236,7 @@ def go(
 
     instances_seen = 0
     last_eval = float('-inf')
+    last_unfrozen = freeze_blocks - 1
 
     for i in (bar := trange(batches)):
 
@@ -356,19 +336,6 @@ def go(
             loss = (rloss / input.size(1))
             # -- We divide out the time, but sum over the instances
 
-            if teacher is not None and teacher_alpha > 0.0:
-                with torch.no_grad():
-                    teacher_out = teacher(input)
-
-                tloss = F.cross_entropy(output.transpose(2, 1), teacher_out.softmax(dim=-1).transpose(2, 1), reduction='sum')
-
-                wandb.log({
-                    'teacher_alpha': teacher_alpha,
-                    'teacher loss': tloss.item() / (input.size(0) * input.size(1))
-                })
-
-                loss = loss + teacher_alpha * (tloss / input.size(1))
-
         scaler.scale(loss).backward()
         accumulated += input.size(0)
 
@@ -435,8 +402,13 @@ def go(
             print('target samples', i)
             print_batch(batch[:4, :], False)
 
-        if teacher is not None and teacher_alpha > 0.0:
-            teacher_alpha -= distill_delta * batch.size(0)
+        if freeze_blocks >  0:
+            if (instances_seen/unfreeze_time) > (last_unfrozen / freeze_blocks):
+                print(f'{instances_seen=} unfreezing blocks from {last_unfrozen+1} to {last_unfrozen + freeze_blocks}.')
+
+                model.unfreeze_layers(lambda i : last_unfrozen + 1 <= i <= last_unfrozen + freeze_blocks)
+
+                last_unfrozen += freeze_blocks
 
         instances_seen += batch.size(0)
 
