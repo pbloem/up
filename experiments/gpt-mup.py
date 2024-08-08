@@ -187,7 +187,7 @@ def go(
     # Target for training
     model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, nl=nl(nl_target),
                             num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor, kqnorm=kqnorm,
-                            attn_factor=attn_factor)
+                            attn_factor=attn_factor, master_res=True)
 
     if freeze_blocks > 0:
         model.freeze_layers(lambda i : i >= freeze_blocks)

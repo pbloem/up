@@ -16,7 +16,7 @@ class TransformerBlock(nn.Module):
     """
 
     def __init__(self, emb, heads, mask, seq_length, ff_hidden_mult=4, dropout=0.1,
-                 pos_embedding=None, sa_kwargs={}, nl=torch.relu):
+                 pos_embedding=None, sa_kwargs={}, nl=torch.relu, master_res=False):
         super().__init__()
 
         self.nl = Lambda(lambda x : nl(x))
@@ -36,15 +36,34 @@ class TransformerBlock(nn.Module):
 
         self.do = nn.Dropout(dropout)
 
+        self.a = None
+        if master_res:
+            # Parameter for the master residual connection.
+            self.a = nn.Parameter(torch.tensor([1.0]))
+            # initially frozen
+            self.a.requires_grad = False
+
     def forward(self, x):
 
+        orig = x
+
         attended = self.attention(x)
-        attended = self.do(attended)
-        x = self.norm1(attended) + x
+
+        x = self.norm1(attended + x)
+
+        x = self.do(x)
 
         fedforward = self.ff(x)
-        fedforward = self.do(fedforward)
-        x = self.norm2(fedforward) + x
+
+        x = self.norm2(fedforward + x)
+
+        x = self.do(x)
+
+        if self.a: # master residual connection
+            a = self.clip(0, 1)
+            return a * x + (1-a) * orig
+            # -- Return a convex mixture of the input and the output. This allows us to effectively disable the layer by
+            #    setting a=0.0
 
         return x
 
@@ -298,7 +317,8 @@ class GTransformer(nn.Module):
     """
 
     def __init__(self, emb, heads, depth, seq_length, num_tokens, nl=torch.relu, mask_channel=False,
-                 autoregressive=True, dropout=0.1, nosqrt=False, output_mult=1, kqnorm=False, attn_factor=1.0):
+                 autoregressive=True, dropout=0.1, nosqrt=False, output_mult=1, kqnorm=False, attn_factor=1.0,
+                 master_res=False):
         """
 
         :param emb:
@@ -327,7 +347,7 @@ class GTransformer(nn.Module):
         for _ in range(depth):
             tblocks.append(
                 TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl,
-                                 dropout=dropout, sa_kwargs={
+                                 dropout=dropout, master_res=master_res, sa_kwargs={
                                     'scalefactor': attn_factor/(emb/heads) if nosqrt else attn_factor/math.sqrt(emb/heads),
                                     'kqnorm': kqnorm
                                 }
@@ -366,12 +386,11 @@ class GTransformer(nn.Module):
         :return:
         """
         for i, block in enumerate(self.tblocks):
+            assert block.a
             if check(i):
                 print(f'Freezing layer {i}.')
-                for norm in (block.norm1, block.norm2):
-                    norm.weight.requires_grad = False
-                    norm.weight.fill_(0.0)
-
+                block.a.requires_grad = False
+                block.a = 0.0
 
     def unfreeze_layers(self, check):
         """
@@ -383,10 +402,10 @@ class GTransformer(nn.Module):
         :return:
         """
         for i, block in enumerate(self.tblocks):
+            assert block.a
             if check(i):
                 print(f'Unfreezing layer {i}.')
-                for norm in (block.norm1, block.norm2):
-                    norm.weight.requires_grad = True
+                block.a.requires_grad = True
 
     def mup(self, base_lr, width0, optcls=torch.optim.Adam, make_opt=True, factor=1, factor_out=1, weight_decay=0.0):
         """
@@ -421,6 +440,9 @@ class GTransformer(nn.Module):
             if make_opt:
                 baseparms.extend(block.norm1.parameters())
                 baseparms.extend(block.norm2.parameters())
+
+                if block.a:
+                    baseparms.append(block.a)
 
                 if hasattr(block.attention, 'kln'):
                     baseparms.extend(block.attention.kln.parameters())
