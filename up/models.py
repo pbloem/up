@@ -358,7 +358,7 @@ class GTransformer(nn.Module):
                                 'scalefactor': attn_factor/(emb/heads) if nosqrt else attn_factor/math.sqrt(emb/heads),
                                 'kqnorm': kqnorm
                             }
-            ) for _ in range(depth - num_progblocks)
+            ) for _ in range(num_progblocks)
         )
 
 
