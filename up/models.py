@@ -346,7 +346,7 @@ class GTransformer(nn.Module):
         for _ in range(depth):
             tblocks.append(
                 TransformerBlock(emb=emb, heads=heads, seq_length=seq_length, mask=autoregressive, nl=nl,
-                                 dropout=dropout, master_res=master_res, sa_kwargs={
+                                 dropout=dropout, master_res=master_res, init=init, sa_kwargs={
                                     'scalefactor': attn_factor/(emb/heads) if nosqrt else attn_factor/math.sqrt(emb/heads),
                                     'kqnorm': kqnorm
                                 }
