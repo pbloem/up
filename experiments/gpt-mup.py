@@ -454,7 +454,7 @@ def go(
 
         if freeze_blocks >  0:
             for i in loglayers:
-                if type(model.tblocks[i]) is ProgTransformerBlock:
+                if i < depth and type(model.tblocks[i]) is ProgTransformerBlock:
                     wandb.log({
                         f'sig(a) (layer {i})': model.tblocks[i].a.item()
                     }, step=instances_seen)
