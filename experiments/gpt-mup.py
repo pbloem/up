@@ -104,6 +104,7 @@ def get_flops(model, batch_size, ctx, backward=False):
                 loss = F.cross_entropy(output.transpose(2,1), target)
                 scaler.scale(loss).backward()
                 scaler.step(opt)
+                opt.zero_grad()
 
     # total_gflops = sum(k.flops for k in p.key_averages()) / 1e9
     total_flops = sum([e.flops for e in p.events()])
@@ -164,7 +165,8 @@ def go(
          depth_factor=1.0,             # Scale the depth by this amount
          freeze_blocks=8,
          unfreeze_time = 10_000,       # Number of instances to wait before unfreezing the pro
-         loglayers = [1,18,22]
+         loglayers = [1,18,22],
+         count_flops = False
 ):
 
     """
@@ -265,10 +267,11 @@ def go(
 
     sampletime = -1.0
 
-    # Measure flops per batch
-    target_flops = get_flops(model, batch_size=target_microbatch_size, ctx=context, backward=True)
-    source_flops = get_flops(cmp_source, batch_size=source_microbatch_size, ctx=context, backward=False)
-    print(f'target (GFLOps): {target_flops / 1e9}, source (GFLOps): {source_flops / 1e9}')
+    if count_flops:
+        # Measure flops per batch
+        target_flops = get_flops(model, batch_size=target_microbatch_size, ctx=context, backward=True)
+        source_flops = get_flops(cmp_source, batch_size=source_microbatch_size, ctx=context, backward=False)
+        print(f'target (GFLOps): {target_flops / 1e9}, source (GFLOps): {source_flops / 1e9}')
 
 
     results = { # All relevant results, to be saved as a json file after each eval.
