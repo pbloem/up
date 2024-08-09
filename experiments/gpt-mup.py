@@ -72,6 +72,46 @@ def get_depth(width):
 
     return int(round( (math.log(width) - a) / b ))
 
+def get_flops(model, batch_size, ctx, backward=False):
+    """
+    Estimates the number of flops spent in one forward and one backward at the given microbatch size.
+    :param model:
+    :param batch_size:
+    :param ctx:
+    :return:
+    """
+
+    scaler = torch.cuda.amp.GradScaler()
+
+    input  = torch.randint(low=0, high=NUM_TOKENS, size=(batch_size, ctx), device=d())
+
+    if backward:
+        target = torch.randint(low=0, high=NUM_TOKENS, size=(batch_size, ctx), device=d())
+        opt = torch.optim.AdamW(lr=3e-4, params=model.parameters())
+
+    with torch.profiler.profile(
+            with_flops=True,
+            activities=[
+                torch.profiler.ProfilerActivity.CPU,
+                torch.profiler.ProfilerActivity.CUDA,
+            ]
+    ) as p:
+        with torch.cuda.amp.autocast():
+
+            output = model(input)
+
+            if backward:
+                loss = F.cross_entropy(output.transpose(2,1), target)
+                scaler.scale(loss).backward()
+                scaler.step(opt)
+
+    # total_gflops = sum(k.flops for k in p.key_averages()) / 1e9
+    total_flops = sum([e.flops for e in p.events()])
+    # -- profiler is very poorly documented... Snippet
+    #    from https://github.com/pytorch/pytorch/issues/69782
+
+    return total_flops
+
 def go(
          width : int,               # Scaling step for the width (steps of 64)
          width_per_step=128,
@@ -225,7 +265,23 @@ def go(
 
     sampletime = -1.0
 
-    print('Start pre-training')
+    # Measure flops per batch
+    target_flops = get_flops(model, batch_size=target_microbatch_size, ctx=context, backward=True)
+    source_flops = get_flops(cmp_source, batch_size=source_microbatch_size, ctx=context, backward=False)
+    print(f'target (GFLOps): {target_flops / 1e9}, source (GFLOps): {source_flops / 1e9}')
+
+
+    results = { # All relevant results, to be saved as a json file after each eval.
+        'vals' : {},
+        'locals' : locals()
+    }
+
+    for k in datasets.keys():
+        results['vals'][k] = {
+            'instances' : [],
+            'bits' :  [],
+            'microbatches' : [],
+        }
 
     accumulated = 0 # nr of instances accumulated currently
     if mbwarmup > 0:
@@ -238,6 +294,7 @@ def go(
     last_eval = float('-inf')
     last_unfrozen = freeze_blocks - 1
 
+    print('Start pre-training')
     for i in (bar := trange(batches)):
 
         if cp_every > 0 and i > 0 and i % cp_every == 0:
@@ -270,7 +327,13 @@ def go(
 
                 wandb.log({f'val/{name}': est}, step=instances_seen)
 
+                results['vals'][name]['instances_seen'].append(instances_seen)
+                results['vals'][name]['bits'].append(est)
+                results['vals'][name]['microbatches'].append(i)
+
             last_eval = instances_seen
+            with open(f'./{name}.json') as f:
+                json.dump(results, f, indent=6) # the json is dumped and overwritten every eval
 
         # Sample noise from a random model and insert into the buffer
         tic()
