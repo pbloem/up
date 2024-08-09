@@ -330,7 +330,7 @@ def go(
 
                 wandb.log({f'val/{name}': est}, step=instances_seen)
 
-                results['vals'][name]['instances_seen'].append(instances_seen)
+                results['vals'][name]['instances'].append(instances_seen)
                 results['vals'][name]['bits'].append(est)
                 results['vals'][name]['microbatches'].append(i)
 
