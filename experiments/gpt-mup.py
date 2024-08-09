@@ -337,7 +337,7 @@ def go(
 
             last_eval = instances_seen
             with open(f'./{wdname}.json', 'w') as f:
-                json.dump(results, f, indent=6) # the json is dumped and overwritten every eval
+                json.dump(results, f, indent=6, default=lambda o: '<not serializable>') # the json is dumped and overwritten every eval
 
         # Sample noise from a random model and insert into the buffer
         tic()
