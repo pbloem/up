@@ -203,6 +203,7 @@ def go(
     sheads = max(swidth//width_per_head, min_heads)
     assert width % heads == 0
 
+    wdname = name
     wd = wandb.init(
         name=name,
         project='up-scaling',
@@ -335,7 +336,7 @@ def go(
                 results['vals'][name]['microbatches'].append(i)
 
             last_eval = instances_seen
-            with open(f'./{name}.json') as f:
+            with open(f'./{wdname}.json', 'w') as f:
                 json.dump(results, f, indent=6) # the json is dumped and overwritten every eval
 
         # Sample noise from a random model and insert into the buffer
