@@ -5,7 +5,7 @@ from up.data import load_data, cas
 from former.util import d, here, tic, toc, sample_batch, enwik8_string, enwik8_bytes, estimate_compression
 import former
 
-import wandb, random, fire, gzip
+import wandb, random, fire, gzip, math
 
 import torch
 from torch import nn
@@ -56,7 +56,7 @@ def nl(name : str):
 
     raise Exception(f'Nonlinearity {name} not recognized.')
 
-def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sample_batch_size=100,
+def go(cemb=768, memb=768, cheads=8, mheads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sample_batch_size=100,
          buffer_size=2000, pre_batches=0, model_batch_size=None,
          reset_prob=0.01, num_batches=10_000_000, lr=3e-4, tags=[],
          debug=False, warmup=100_000, eval_every=5_000, print_every=500, gc=1.0,
@@ -71,7 +71,9 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
          model_file = None,                # Filename of a pretrained model/optimizer
          model_dst = './pretrained-{}.pt', # Where to save the pretrained model Add in an {} for the number of instances
          cp_every = 100_000,       # Save a checkpoint for the model every n batches.
-         dp = False                # Use data-parallel
+         dp = False,               # Use data-parallel
+         mult_lr = True,           # Multiply the base learning rate by the accumulation
+         acc_warmup = 0            # Accumulation warmup (in instances)
        ):
 
     """
@@ -105,7 +107,7 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
     scaler = torch.cuda.amp.GradScaler()
 
     # Target for training
-    model = up.GTransformer(emb=emb, heads=heads, depth=mdepth, seq_length=context, num_tokens=NUM_TOKENS)
+    model = up.GTransformer(emb=memb, heads=mheads, depth=mdepth, seq_length=context, num_tokens=NUM_TOKENS)
 
     if torch.cuda.is_available():
         model.cuda()
@@ -131,9 +133,19 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         print(f'Finished ({toc():.4}s). Best batch size found: {model_batch_size}. Batch sizes and throughputs: {zip(batch_sizes, throughputs)}.')
 
     opt = torch.optim.Adam(lr=lr, params=model.parameters())
+
+
     if warmup > 0:
-        warmup = warmup / accumulate
-        sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
+        # warmup = warmup / accumulate
+        # sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
+
+        maxlr = lr
+        lr = 0.0
+        lrdelta = maxlr / warmup
+
+    else:
+        if mult_lr:
+            lr = lr * accumulate
 
     # Load a pretrained model
     if model_file is not None:
@@ -147,9 +159,9 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
         if pre_file is None:
             cmp_source = \
-                up.ConditionalTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS) \
+                up.ConditionalTransformer(emb=cemb, heads=cheads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS) \
                 if sequential else \
-                up.GTransformer(emb=emb, heads=heads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nonlinearity), mask_channel=True)
+                up.GTransformer(emb=cemb, heads=cheads, depth=cdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nonlinearity), mask_channel=True)
 
             if torch.cuda.is_available():
                 cmp_source.cuda()
@@ -173,6 +185,14 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         if pre_batches > 0:
 
             print('Start pre-training')
+
+            accumulated = acc_last = 0
+            if acc_warmup > 0:
+                accraw = 1.0
+                accdelta = (accumulate - 1) / acc_warmup
+            else:
+                accraw = accumulate
+                accdelta = 0.0
 
             for i in (bar := trange(pre_batches)):
 
@@ -275,34 +295,52 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
 
                 with torch.cuda.amp.autocast():
                     output = model(input)
-                    loss = F.cross_entropy(output.transpose(2, 1), target) / accumulate
+                    rloss = F.cross_entropy(output.transpose(2, 1), target)
+                    loss = rloss / accumulate # scale the loss to compensate for the accumulation
 
                 scaler.scale(loss).backward()
+                accumulated += 1
 
-                gn = gradient_norm(model)
-                if gc > 0.0:
-                    nn.utils.clip_grad_norm_(model.parameters(), gc)
+                acc_current = min(int(round(accraw)), accumulate)
+                if i > acc_last + acc_current: # perform a step
 
-                if i % accumulate == 0: # perform a step
+                    gn = gradient_norm(model)
+
+                    if gc > 0.0:
+                        nn.utils.clip_grad_norm_(model.parameters(), gc)
+
+                    wandb.log({
+                        'gradient_norm': gn,
+                        'accumulated': accumulated # Sanity check.
+                    })
+
                     scaler.step(opt)
                     scaler.update()
 
                     opt.zero_grad()
 
-                    if warmup > 0:
-                        sch.step()
+                    accumulated = 0
+                    acc_last = i
 
                 traintime = toc()
 
                 wandb.log({
-                    'loss': loss.item(),
-                    'learning_rate': sch.get_last_lr()[0],
-                    'gradient_norm': gn,
+                    'loss': rloss.item(),
+                    'learning_rate': lr * acc_current if mult_lr else lr,
                     'sample_time': sampletime,
                     'train_time': traintime,
-                    'pre-training': 1.0
+                    'pre-training': 1.0,
+                    'accumulate': accraw
                 })
-                bar.set_postfix({'loss': f'{loss.item():.02}'})
+                bar.set_postfix({'loss': f'{rloss.item():.02}'})
+
+                if acc_warmup > 0 and accraw < accumulate:
+                    accraw += accdelta * batch.size(0)
+
+                if warmup > 0:
+                    lr += lrdelta * batch.size(0)
+
+                    set_lr(lr * acc_current if mult_lr else lr, opt)
 
                 if i % print_every == 0:
 
@@ -376,6 +414,12 @@ def go(emb=768, heads=8, cdepth=3, mdepth=6, context=128, temperature=0.5, sampl
         })
 
         bar.set_postfix({'loss': f'{loss:.02}'})
+
+def set_lr(lr, opt):
+    for g in opt.param_groups:
+        g['lr'] = lr
+        g['initial_lr'] = lr
+
 
 if __name__ == '__main__':
     fire.Fire(go)
