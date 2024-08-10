@@ -269,6 +269,74 @@ def mup_sample(
             print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
         print('---')
 
+def example(
+        widthperhead=128,
+        heads=12,
+        context=37,
+        nonlinearity='relu',
+        samples=4,
+        temperature=0.5,
+        mult1=2,
+        mult2=4,
+        multb=1,
+        usemask=False,
+        seed=0
+    ):
+    """
+    Used to generate the example in Figure 1.
+
+    :param widthperhead:
+    :param heads:
+    :param context:
+    :param nonlinearity:
+    :param samples:
+    :param batch_size:
+    :param temperature:
+    :param mult1:
+    :param mult2:
+    :param multb:
+    :param usemask:
+    :return:
+    """
+    torch.manual_seed(seed)
+
+    num_tokens = 64
+    width = heads * widthperhead
+
+    # Initialize the source model
+    source = up.GTransformer(emb=width, heads=heads, depth=get_depth(width), seq_length=context, num_tokens=num_tokens,
+            nl=nl(nonlinearity), mask_channel=True)
+
+
+    input = torch.randint(low=0, high=num_tokens, size=(1, context), device=d())
+    print_batch(input, True)
+
+    for _ in range(samples):
+        up.weights_init_mup(source, mult1=mult1, mult2=mult2, multb=multb, mask=usemask)
+        output = source(input)
+
+        chars, mask = output[:, :, :-1], output[:, :, -1]
+
+        chars = sample(chars, temperature=temperature)
+
+        if usemask:
+            mask = torch.sigmoid(mask).to(torch.bool)
+            chars[mask] = input[mask]
+
+        for seq in chars.tolist():
+            # print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
+            print_batch(chars, True)
+
+def print_batch(batch, ascii_only):
+
+    for seq in batch:
+        for c in seq:
+            if ascii_only:
+                print(str(chr(c+32)), end='', flush=True)
+            else:
+                print(cas(c), end='', flush=True)
+        print()
+    print()
 
 def nl(name : str):
     if name == 'relu':

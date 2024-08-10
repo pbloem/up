@@ -158,6 +158,9 @@ def go(
          attn_factor=1.0,             # additional scaling factor for the attention weight (pre-softmax)
          source_width=None,           # Width factor of the source model (if None, the same as the target)
          source_microbatch_size=None,
+         source='transformer',        # Source data generator (transformer, uniform, markov, pointwise)
+         source_order=3,              # Order for the Markov data generator
+         source_alpha=0.5,            # alpha for the pointwise generator
          nl_source='relu',
          nl_target='relu',
          kqnorm=False,
@@ -256,17 +259,113 @@ def go(
 
     print(opt)
 
-    cmp_source = up.GTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nl_source), mask_channel=True)
+    generator = None
+    # -- generator(batch_size) generates a batch of source data.
 
-    if torch.cuda.is_available():
-        cmp_source.cuda()
+    if source == 'transformer':
+        cmp_source = up.GTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nl_source), mask_channel=True)
 
-    if dp:
-        cmp_source = torch.nn.DataParallel(cmp_source)
+        if torch.cuda.is_available():
+            cmp_source.cuda()
 
-    buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device=d())
+        if dp:
+            cmp_source = torch.nn.DataParallel(cmp_source)
 
-    sampletime = -1.0
+        buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device=d())
+
+        sampletime = -1.0
+
+        def generator_trf(bs):
+
+            # Sample noise from a random model and insert into the buffer
+            tic()
+            with torch.no_grad():
+                # Re-initialize the source
+
+                if old_init:
+                    up.weights_init(cmp_source, init_mult_max=50.0, mask_prob_max=0.7)
+                else:
+                    up.weights_init_mup(cmp_source, mult1=weight_mult1, mult2=weight_mult2, multb=weight_multb,
+                                        mask=source_mask)
+
+                # slice a random selection of rows from the buffer (without replacement)
+                iz = random.sample(range(buffer.size(0)), source_microbatch_size)
+                z = buffer[iz, :]
+
+                # replace some random rows with uniform random characters
+                rows = torch.bernoulli(torch.full(size=(source_microbatch_size, 1), fill_value=reset_prob))
+                mask = rows.expand(source_microbatch_size, context).to(torch.bool)
+
+                uniform = torch.randint(low=0, high=NUM_TOKENS, size=(source_microbatch_size, context), device=d())
+                z[mask] = uniform[mask]
+
+                # pass it through a randomly chosen model
+                output = cmp_source(z)
+
+                # The model generates an output sequence as well as a mask. The final sequence has the output
+                # characters at the masked positions and the input characters at the non-masked positions. The
+                # idea is that this makes it more likely for the model to retain any structure present in the
+                # input.
+                # -- It is theoretically possible for the model to do this without the masking, but it's very
+                #    unlikely with random parameters.
+                chars, mask = output[:, :, :-1], output[:, :, -1]
+
+                chars = sample(chars, temperature=temperature)
+                mask = torch.sigmoid(mask).to(torch.bool)
+
+                z[mask] = chars[mask]
+
+                buffer[iz, :] = z
+
+                # Now slice a separate sample of instances from the buffer.
+                iz = random.sample(range(buffer_size), bs)
+                batch = buffer[iz, :]
+                # -- Using different indices for the source model and the batch makes the sample more like an iid. sample
+                #    (or at least less obviously dependent).
+
+                return batch
+
+        generator = generator_trf
+
+    elif source == 'uniform':
+        # Simple uniform random noise (for ablations)
+        def generator_uniform(bs):
+            return torch.randint(low=0, high=NUM_TOKENS, size=(bs, context), device=d())
+
+        generator = generator_uniform
+
+    elif source == 'pointwise':
+
+        def generator_pointwise(bs):
+
+            # The Dirichlet parameters are all near 0, except for a random number which are set to 1.0
+            dir_parms = torch.full(fill_value = 1e-8, size=(bs, NUM_TOKENS), dtype=torch.float, device=d())
+            for i in range(bs):
+                k = random.choice(range(20)) #random.choice(range(NUM_TOKENS))
+                mask = random.sample(population=range(NUM_TOKENS), k=k)
+                dir_parms[i, mask] = 1.0
+
+            dir = torch.distributions.Dirichlet(dir_parms)
+
+            cat_parms = dir.sample()
+            assert cat_parms.size() == (bs, NUM_TOKENS)
+
+            cat = torch.distributions.Categorical(probs=cat_parms)
+            sample = cat.sample((context, )).transpose(0, 1)
+
+            return sample
+
+        generator = generator_pointwise
+
+    elif source == 'markov':
+
+        def generator(bs):
+            pass
+
+        exit()
+
+    else:
+        raise Exception(f'Source {source} not recognized')
 
     if count_flops:
         # Measure flops per batch
@@ -339,45 +438,6 @@ def go(
             with open(f'./{wdname}.json', 'w') as f:
                 json.dump(results, f, indent=6, default=lambda o: '<not serializable>') # the json is dumped and overwritten every eval
 
-        # Sample noise from a random model and insert into the buffer
-        tic()
-        with torch.no_grad():
-            # Re-initialize the source
-
-            if old_init:
-                up.weights_init(cmp_source, init_mult_max=50.0, mask_prob_max=0.7)
-            else:
-                up.weights_init_mup(cmp_source, mult1=weight_mult1, mult2=weight_mult2, multb=weight_multb, mask=source_mask)
-
-            # slice a random selection of rows from the buffer (without replacement)
-            iz = random.sample(range(buffer.size(0)), source_microbatch_size)
-            z = buffer[iz, :]
-
-            # replace some random rows with uniform random characters
-            rows = torch.bernoulli(torch.full(size=(source_microbatch_size, 1), fill_value=reset_prob))
-            mask = rows.expand(source_microbatch_size, context).to(torch.bool)
-
-            uniform = torch.randint(low=0, high=NUM_TOKENS, size=(source_microbatch_size, context), device=d())
-            z[mask] = uniform[mask]
-
-            # pass it through a randomly chosen model
-            output = cmp_source(z)
-
-            # The model generates an output sequence as well as a mask. The final sequence has the output
-            # characters at the masked positions and the input characters at the non-masked positions. The
-            # idea is that this makes it more likely for the model to retain any structure present in the
-            # input.
-            # -- It is theoretically possible for the model to do this without the masking, but it's very
-            #    unlikely with random parameters.
-            chars, mask = output[:, :, :-1], output[:, :, -1]
-
-            chars = sample(chars, temperature=temperature)
-            mask = torch.sigmoid(mask).to(torch.bool)
-
-            z[mask] = chars[mask]
-
-            buffer[iz, :] = z
-
         sampletime = toc()
 
         tic()
@@ -387,9 +447,8 @@ def go(
         # If the current macrobatch sizer is smaller than the microbatch size, we go with the smaller value
         # (i.e. we leave memory empty).
 
-        iz = random.sample(range(buffer_size), bs)
+        batch = generator(bs)
 
-        batch = buffer[iz, :]
         if torch.cuda.is_available():
             batch = batch.cuda()
 
