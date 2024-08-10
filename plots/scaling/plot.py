@@ -85,6 +85,8 @@ def go():
     # cbar.set_ticks(ticks=[], labels=[] )
     cbar.set_ticks(ticks=widths, labels=[f'{width}/{depth}' for width, depth in zip(widths, depths)] )
 
+    # plt.tight_layout()
+
     plt.savefig('scaling.png')
     plt.savefig('scaling.pdf')
 
