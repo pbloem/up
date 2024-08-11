@@ -201,8 +201,8 @@ def go(
     heads = max(width//width_per_head, min_heads)
     assert width % heads == 0
 
-    swidth = width if source_width is None else width_per_step * source_width
-    sdepth =get_depth(swidth)
+    swidth = width if source_width is None else source_width
+    sdepth = get_depth(swidth)
     sheads = max(swidth//width_per_head, min_heads)
     assert width % heads == 0
 
