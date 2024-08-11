@@ -1,6 +1,6 @@
 import up
 from up.util import tic, toc, coords, d, sample, sample_sequence, gradient_norm
-from up.data import load_data, cas
+from up.data import load_data, cas, gen_autseq
 from up import ProgTransformerBlock
 
 from former.util import d, here, tic, toc, sample_batch, enwik8_string, enwik8_bytes, estimate_compression
@@ -158,7 +158,7 @@ def go(
          attn_factor=1.0,             # additional scaling factor for the attention weight (pre-softmax)
          source_width=None,           # Width factor of the source model (if None, the same as the target)
          source_microbatch_size=None,
-         source='transformer',        # Source data generator (transformer, uniform, markov, pointwise)
+         source='transformer',        # Source data generator (transformer, uniform, ndfa, pointwise)
          source_order=3,              # Order for the Markov data generator
          source_alpha=0.5,            # alpha for the pointwise generator
          nl_source='relu',
@@ -357,12 +357,17 @@ def go(
 
         generator = generator_pointwise
 
-    elif source == 'markov':
+    elif source == 'ndfa':
 
-        def generator(bs):
-            pass
+        def generator_ndfa(bs):
+            batch = []
+            for i in range(bs):
+                batch.append(gen_autseq(aut=None, length=context, vocab=NUM_TOKENS))
+            batch = torch.tensor(batch, device=d())
 
-        exit()
+            return batch
+
+        generator = generator_ndfa
 
     else:
         raise Exception(f'Source {source} not recognized')
