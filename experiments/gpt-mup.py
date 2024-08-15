@@ -312,10 +312,9 @@ def go(
                 #    unlikely with random parameters.
                 chars, mask = output[:, :, :-1], output[:, :, -1]
 
+                chars = sample(chars, temperature=temperature)
                 if idmask:
-                    chars = sample(chars, temperature=temperature)
                     mask = torch.sigmoid(mask).to(torch.bool)
-
                     z[mask] = chars[mask]
                 else:
                     z = chars # ignore mask
