@@ -170,7 +170,7 @@ def go(
          unfreeze_time = 10_000,       # Number of instances to wait before unfreezing the pro
          loglayers = [1,18,22],
          count_flops = False,
-         idmask=True                   # Whether to apply the id mask trick (replacing some output values by the input)
+         idmask=True                   # Whether to apply the id mask trick (replacing some output values by the input) --
 ):
 
     """
@@ -520,10 +520,10 @@ def go(
             }, step=instances_seen)
 
         if freeze_blocks >  0:
-            for i in loglayers:
-                if i < depth and type(model.tblocks[i]) is ProgTransformerBlock:
+            for il in loglayers:
+                if il < depth and type(model.tblocks[il]) is ProgTransformerBlock:
                     wandb.log({
-                        f'sig(a) (layer {i})': model.tblocks[i].a.item()
+                        f'sig(a) (layer {il})': model.tblocks[il].a.item()
                     }, step=instances_seen)
 
         wandb.log({}, step=instances_seen, commit=True)
@@ -548,7 +548,7 @@ def go(
                 if (instances_seen/unfreeze_time) > ((last_unfrozen+1) / freeze_blocks):
                     print(f'{instances_seen=} unfreezing blocks from {last_unfrozen+1} to {last_unfrozen + freeze_blocks}.')
 
-                    model.enable_layers(lambda i : last_unfrozen + 1 <= i <= last_unfrozen + freeze_blocks)
+                    model.enable_layers(lambda j : last_unfrozen + 1 <= j <= last_unfrozen + freeze_blocks)
 
                     last_unfrozen += freeze_blocks
 
