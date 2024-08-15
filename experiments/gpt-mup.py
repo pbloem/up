@@ -169,7 +169,8 @@ def go(
          freeze_blocks=8,
          unfreeze_time = 10_000,       # Number of instances to wait before unfreezing the pro
          loglayers = [1,18,22],
-         count_flops = False
+         count_flops = False,
+         idmask=True                   # Whether to apply the id mask trick (replacing some output values by the input)
 ):
 
     """
@@ -310,10 +311,11 @@ def go(
                 #    unlikely with random parameters.
                 chars, mask = output[:, :, :-1], output[:, :, -1]
 
-                chars = sample(chars, temperature=temperature)
-                mask = torch.sigmoid(mask).to(torch.bool)
+                if idmask:
+                    chars = sample(chars, temperature=temperature)
+                    mask = torch.sigmoid(mask).to(torch.bool)
 
-                z[mask] = chars[mask]
+                    z[mask] = chars[mask]
 
                 buffer[iz, :] = z
 
