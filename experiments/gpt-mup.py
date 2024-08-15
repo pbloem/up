@@ -264,7 +264,8 @@ def go(
     # -- generator(batch_size) generates a batch of source data.
 
     if source == 'transformer':
-        cmp_source = up.GTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context, num_tokens=NUM_TOKENS, nl=nl(nl_source), mask_channel=True)
+        cmp_source = up.GTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context,
+                                     num_tokens=NUM_TOKENS, nl=nl(nl_source), mask_channel=True)
 
         if torch.cuda.is_available():
             cmp_source.cuda()
@@ -316,6 +317,8 @@ def go(
                     mask = torch.sigmoid(mask).to(torch.bool)
 
                     z[mask] = chars[mask]
+                else:
+                    z = chars # ignore mask
 
                 buffer[iz, :] = z
 
