@@ -335,7 +335,7 @@ def sample_sequence(model, seed, max_context, num_tokens, length=600, temperatur
     # sequence = sequence[None, :].expand(batch_size, b)
     rng = trange if verbose else range
 
-    for _ in rng(length):
+    for i in rng(length):
 
         # Input is the tail end of the sampled sequence (as many tokens as the model can handle)
         input = sequence[:, -max_context:]
@@ -343,7 +343,14 @@ def sample_sequence(model, seed, max_context, num_tokens, length=600, temperatur
         b, l = input.size()
 
         # Run the current input through the model
-        output = model(input) if conditional is None else model(input, conditional)
+        if conditional is not None:
+            to = i + 1
+            fr = max(0, to - max_context)
+            output = model(input, conditional[:, fr:to])
+            # -- Note that we only give the model a sliding window view on the conditional. This makes sampling more
+            #    efficient.
+        else:
+            output = model(input)
         # output = F.log_softmax(output, dim=-1)
 
         assert output.size() == (b, l, num_tokens)

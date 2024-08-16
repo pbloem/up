@@ -242,7 +242,7 @@ def rep_sample(width=384,
                 seed = torch.randint(low=0, high=num_tokens, size=(batch_size, 1), device=d())
                 batch = sample_sequence(source, seed, max_context=subcontext, num_tokens=num_tokens, length=context,
                                         temperature=temperature,
-                                        conditional=input, verbose=True)
+                                        conditional=input[:, :], verbose=True)
 
                 chars = batch[:, :-1]
             else:
