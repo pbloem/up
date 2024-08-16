@@ -312,7 +312,7 @@ def go(
 
                 if sequential:
                     seed = torch.randint(low=0, high=NUM_TOKENS, size=(source_microbatch_size, 1), device=d())
-                    batch = sample_sequence(source, seed, context, num_tokens=NUM_TOKENS, length=context,
+                    batch = sample_sequence(cmp_source, seed, context, num_tokens=NUM_TOKENS, length=context,
                                             temperature=temperature,
                                             conditional=z, verbose=False)
                     z = batch[:, :-1]
