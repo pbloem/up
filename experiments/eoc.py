@@ -202,8 +202,9 @@ def rmask(tensor, prob):
 
 
 def rep_sample(width=384,
-               widthperhead=128,
+                widthperhead=128,
                 context = 512,
+                subcontext = 64,
                 nonlinearity = 'relu',
                 samples = 4,
                 batch_size = 4,
@@ -239,7 +240,7 @@ def rep_sample(width=384,
                 #    we are training (which is always autoregressive).
 
                 seed = torch.randint(low=0, high=num_tokens, size=(batch_size, 1), device=d())
-                batch = sample_sequence(source, seed, context, num_tokens=num_tokens, length=context,
+                batch = sample_sequence(source, seed, max_context=subcontext, num_tokens=num_tokens, length=context,
                                         temperature=temperature,
                                         conditional=input, verbose=True)
 

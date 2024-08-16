@@ -173,6 +173,7 @@ def go(
          count_flops = False,
          idmask=True,                  # Whether to apply the id mask trick (replacing some output values by the input) --
          sdepth=None,
+         subcontext=64,                # Maximum context to look at when sampling
 ):
 
     """
@@ -313,7 +314,7 @@ def go(
 
                 if sequential:
                     seed = torch.randint(low=0, high=NUM_TOKENS, size=(source_microbatch_size, 1), device=d())
-                    batch = sample_sequence(cmp_source, seed, context, num_tokens=NUM_TOKENS, length=context,
+                    batch = sample_sequence(cmp_source, seed, max_context=subcontext, num_tokens=NUM_TOKENS, length=context,
                                             temperature=temperature,
                                             conditional=z, verbose=False)
                     z = batch[:, :-1]
