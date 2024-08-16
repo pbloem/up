@@ -267,7 +267,7 @@ def go(
     if source == 'transformer':
 
         if sequential:
-            source = up.ConditionalTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context,
+            cmp_source = up.ConditionalTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context,
                         num_tokens=NUM_TOKENS)
         else:
             cmp_source = up.GTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context,
@@ -275,6 +275,7 @@ def go(
 
         if torch.cuda.is_available():
             cmp_source.cuda()
+
         if dp:
             cmp_source = torch.nn.DataParallel(cmp_source)
 
