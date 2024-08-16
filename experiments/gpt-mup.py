@@ -314,7 +314,7 @@ def go(
                     seed = torch.randint(low=0, high=NUM_TOKENS, size=(source_microbatch_size, 1), device=d())
                     batch = sample_sequence(source, seed, context, num_tokens=NUM_TOKENS, length=context,
                                             temperature=temperature,
-                                            conditional=input, verbose=False)
+                                            conditional=z, verbose=False)
                     z = batch[:, :-1]
                 else:
                     # pass it through a randomly chosen model
