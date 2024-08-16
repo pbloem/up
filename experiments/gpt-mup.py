@@ -171,7 +171,8 @@ def go(
          unfreeze_time = 10_000,       # Number of instances to wait before unfreezing the pro
          loglayers = [1,18,22],
          count_flops = False,
-         idmask=True                   # Whether to apply the id mask trick (replacing some output values by the input) --
+         idmask=True,                  # Whether to apply the id mask trick (replacing some output values by the input) --
+         sdepth=None,
 ):
 
     """
@@ -204,7 +205,7 @@ def go(
     assert width % heads == 0
 
     swidth = width if source_width is None else source_width
-    sdepth = get_depth(swidth)
+    sdepth = get_depth(swidth) if sdepth is None else sdepth
     sheads = max(swidth//width_per_head, min_heads)
     assert width % heads == 0
 
