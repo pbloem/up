@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import up
-from up.util import d, sample
+from up.util import d, sample, sample_sequence
 
 from tqdm import trange
 
@@ -200,6 +200,69 @@ def rmask(tensor, prob):
     mask = torch.bernoulli(torch.full_like(tensor, fill_value=prob)).to(torch.bool)
     tensor[mask] = 0.0
 
+
+def rep_sample(width=384,
+               widthperhead=128,
+                context = 512,
+                nonlinearity = 'relu',
+                samples = 4,
+                batch_size = 4,
+                temperature = 0.01,
+                mult1 = 4,
+                mult2 = 1,
+                multb = 0,
+                usemask = False,
+                num_tokens=256,
+                reps = 3,
+                sequential = False
+    ):
+
+        if sequential:
+            source = up.ConditionalTransformer(emb=width, heads=width//widthperhead, depth=get_depth(width), seq_length=context,
+                        num_tokens=num_tokens)
+        else:
+            source = up.GTransformer(emb=width, heads=width//widthperhead, depth=get_depth(width), seq_length=context,
+                        num_tokens=num_tokens, nl=nl(nonlinearity), mask_channel=True)
+
+        if torch.cuda.is_available():
+            source.cuda()
+
+        input = torch.randint(low=0, high=num_tokens, size=(batch_size, context), device=d())
+
+        for i in range(reps):
+
+            if sequential:
+                up.weights_init_mup_seq(source, mult1=mult1, mult2=mult2, multb=multb, mask=True)
+
+                # -- In sequential mode, we autoregressively sample, with z as a conditional input
+                #    This is very slow, but the computational patterns we expect to see are closer to those of the model
+                #    we are training (which is always autoregressive).
+
+                seed = torch.randint(low=0, high=num_tokens, size=(batch_size, 1), device=d())
+                batch = sample_sequence(source, seed, context, num_tokens=num_tokens, length=context,
+                                        temperature=temperature,
+                                        conditional=input, verbose=True)
+
+                chars = batch[:, :-1]
+            else:
+                up.weights_init_mup(source, mult1=mult1, mult2=mult2, multb=multb, mask=True)
+
+                # input = torch.full(fill_value=0, size=(batch_size, context), device=d())
+                output = source(input)
+
+                chars, mask = output[:, :, :-1], output[:, :, -1]
+
+                chars = sample(chars, temperature=temperature)
+                mask = torch.sigmoid(mask).to(torch.bool)
+
+                if usemask:
+                    chars[mask] = input[mask]
+
+            print(i, '---')
+            for seq in chars.tolist():
+                print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
+
+            input = chars
 
 def mup_sample(
         widthperhead=128,

@@ -2,4 +2,4 @@ from . import util
 from . import data
 
 from .models import (VAE, AE, ConditionalBlock, ConditionalTransformer, GTransformer, weights_init, weights_init_minimal,
-                     weights_init_plain, weights_init_mup, TransformerBlock, ProgTransformerBlock)
+                     weights_init_plain, weights_init_mup, weights_init_mup_seq, TransformerBlock, ProgTransformerBlock)

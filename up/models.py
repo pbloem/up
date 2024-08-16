@@ -501,7 +501,6 @@ class ConditionalBlock(nn.Module):
         self.norm2 = nn.LayerNorm(emb)
         self.norm3 = nn.LayerNorm(emb)
 
-
         self.ff = nn.Sequential(
             nn.Linear(emb, ff_hidden_mult * emb),
             nn.ReLU(),
@@ -531,10 +530,12 @@ class ConditionalTransformer(nn.Module):
     Transformer for generating text (character by character), which is conditioned on an input sequence.
     """
 
-    def __init__(self, emb, heads, depth, seq_length, num_tokens, attention_type='default'):
+    def __init__(self, emb, heads, depth, seq_length, num_tokens, attention_type='default', output_mult=1):
         super().__init__()
 
+        self.emb = emb
         self.num_tokens = num_tokens
+        self.output_mult = output_mult
 
         self.token_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=num_tokens)
         self.pos_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=seq_length)
@@ -571,9 +572,99 @@ class ConditionalTransformer(nn.Module):
         for i, block in enumerate(self.tblocks):
             x = block(x, z)
 
-        x = self.toprobs(x)
+        x = self.toprobs(x) * self.output_mult
 
         return x
+
+    def mup(self, base_lr, width0, optcls=torch.optim.Adam, make_opt=True, factor=1, factor_out=1, weight_decay=0.0):
+        """
+        Implements the muP parametrization of Yang 2022. Re-inits all weights, and returns an Adam optimizer with the
+        required learning rates per weight group.
+
+        :param base_lr: Learning rate at `width = width0`. This is assumed to apply uniformly to all parameters.
+        :param width0:
+        :param optcls: Class for the optimizer to return (note that the current scaling applies to Adam and some variants, but not to SGD)
+        :param make_opt: Create and return an muP optimizer.
+        :param factor: A multiplier for the base initialization standard deviation (this is the square root of the sigmas in the paper).
+        :param factor_out: Factor for the output init. May need to be set to width0 if trying to replicate an SP-trained
+             model
+        :return: A muP optimizer if requested, else nothing.
+        """
+
+        if make_opt:
+            # Ratio between the current width and the width for which the base LR was tuned
+            widthscale = self.emb / width0
+
+            baseparms = []  # Parameters for which the base learning rate transfers directly
+            scaleparms = [] # Parameters for which the base learning rate is multiplied by 1 / widthscale
+
+            # - Input matrices token and pos embeddings. These are not scaled.
+            baseparms.extend(self.token_embedding.parameters())
+            baseparms.extend(self.pos_embedding.parameters())
+
+        # - Trf blocks
+        for block in self.tblocks:
+
+            # layer norms. Not scaled.
+            if make_opt:
+                baseparms.extend(block.norm1.parameters())
+                baseparms.extend(block.norm2.parameters())
+                baseparms.extend(block.norm3.parameters())
+
+                if type(block) is ProgTransformerBlock:
+                    baseparms.append(block.a)
+
+                if hasattr(block.attention, 'kln'):
+                    baseparms.extend(block.attention.kln.parameters())
+                if hasattr(block.attention, 'qln'):
+                    baseparms.extend(block.attention.qln.parameters())
+
+            # SA weights and biases
+            for lin in (
+                    block.sattention.tokeys, block.sattention.toqueries, block.sattention.tovalues, block.sattention.unifyheads,
+                    block.cattention.tokeys, block.cattention.toqueries, block.cattention.tovalues, block.cattention.unifyheads
+            ):
+                nn.init.normal_(lin.weight, mean=0.0, std=factor * (1/lin.in_features)**0.5)
+                if lin.bias is not None:
+                    nn.init.constant_(lin.bias, 0.0)
+                    # nn.init.normal_(lin.bias, mean=0.0, std=ff_mult)
+
+                # -- Note that the initialization in the paper is given as variance, where torch requires std, so we
+                #    take the square root.
+                # -- It's not entirely clear from the muP paper how to init the biases, but their code sets them to 0.
+                #    This is also what happens in eqs 3 and 4
+
+                if make_opt:
+                    scaleparms.extend(lin.parameters())
+
+                # scaleparms.extend(block.attention.parameters())
+
+            # FF weights and biases
+            for mod in block.ff:
+                if type(mod) == nn.Linear:
+                    nn.init.normal_(mod.weight, mean=0.0, std=factor * (1/mod.in_features)**0.5)
+                    if mod.bias is not None:
+                        nn.init.constant_(mod.bias, val=0.0)
+                        # nn.init.normal_(mod.bias, mean=0.0, std=ff_mult)
+
+                    if make_opt:
+                        if mod.in_features == self.emb:
+                            scaleparms.extend(mod.parameters())
+                        else:
+                            assert mod.in_features == 4 * self.emb
+                            scaleparms.extend(mod.parameters())
+
+        # - Output head
+        nn.init.normal_(self.toprobs.weight, mean=0.0, std=factor_out * (1/ self.emb) ) # NB. We scale by variance 1/emb^2, so std 1/emb
+        nn.init.constant_(self.toprobs.bias, val=0.0)
+
+        if make_opt:
+            scaleparms.extend(self.toprobs.parameters())
+
+            return optcls([
+                {'params': baseparms},
+                {'params': scaleparms, 'lr': base_lr / widthscale},
+            ], lr=base_lr, weight_decay=weight_decay)
 
 def weights_init(model : nn.Module, init_mult_max=1.0, mask_prob_max=0.0, mup=False):
     """
@@ -689,7 +780,7 @@ def rmask(tensor, prob):
 
 def weights_init_mup(source, mult1=1.4, mult2=100, multb=0.0, mask=False):
     """
-    Initialization found (by trial and error) to be stable unde rthe levine/mup scaling regome.
+    Initialization found (by trial and error) to be stable under the levine/mup scaling regome.
 
     :param model:
     :return:
@@ -705,6 +796,48 @@ def weights_init_mup(source, mult1=1.4, mult2=100, multb=0.0, mask=False):
     for block in source.tblocks:
         for lin in (
         block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
+            lin.weight.data *= mult2
+
+            if lin.bias is not None:
+                lin.bias.data.normal_() * multb
+
+            if mask:
+                rmask(lin.weight.data, random.random())
+
+        for mod in block.ff:
+            if type(mod) == nn.Linear:
+                mod.weight.data *= mult2
+
+                if mod.bias is not None:
+                    mod.bias.data.normal_() * multb
+
+                if mask:
+                    rmask(mod.weight.data, random.random())
+
+        source.toprobs.weight.data *= mult1
+        source.toprobs.bias.data.normal_() * multb
+
+
+def weights_init_mup_seq(source, mult1=1.4, mult2=100, multb=0.0, mask=False):
+    """
+    Initialization found (by trial and error) to be stable under the levine/mup scaling regome.
+
+    :param model:
+    :return:
+    """
+    source.mup(base_lr=None, width0=None, make_opt=False)
+
+    # source.token_embedding.weight.data *= mult1
+    # rmask(source.token_embedding.weight.data, random.random())
+
+    # source.pos_embedding.weight.data *= mult1
+    # rmask(source.pos_embedding.weight.data, random.random())
+
+    for block in source.tblocks:
+        for lin in (
+        block.sattention.tokeys, block.sattention.toqueries, block.sattention.tovalues, block.sattention.unifyheads,
+        block.cattention.tokeys, block.cattention.toqueries, block.cattention.tovalues, block.cattention.unifyheads
+        ):
             lin.weight.data *= mult2
 
             if lin.bias is not None:

@@ -524,7 +524,6 @@ def run_sample(emb=768, heads=8, cdepth=3, context=128, temperature=0.5, sample_
 def nonseq(emb=768, heads=8, depth=12, context=128, temperature=0.5, batch_size=256, num_batches=100_000, lr=3e-4, tags=[],
            debug=False, warmup=100_000, pretrain_its=1, eval_every=5_000, gc=1.0):
     """
-    Generates a dataset by sampling sequences autoregressively from a given model.
 
     :param emb:
     :param heads:

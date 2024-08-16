@@ -1,3 +1,5 @@
+import random
+
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -213,6 +215,76 @@ def markov(train : str, val:str, test :str, max_order=3, lambdas=[1.0, 0.1 , 0.0
     res = [r / len(test) for r in res]
     return res
 
+
+def markov_context(train: str, test: str, max_order=3, lambdas=[1.0, 0.1 , 0.01, 0.0001, 1e-6], context=512, numtokens=None,
+                   verbose=False, train_windows=10_000, test_windows=100_0000):
+    """
+    Computes the compression length of the test data under all Markov models up to the given order. Use a fresh Markov
+    model per context.
+
+    :param data:
+    :param order:
+    :param laplace: The lambda parameter for the laplace smoothing.
+    :return:
+    """
+    ran = tqdm.trange if verbose else range
+
+    numtokens = len({c for c in train+test}) if numtokens is None else numtokens
+    print(numtokens, 'distinct tokens in data.')
+
+    # -- The 0 order model counts 1-grams, the 1 order model counts 2-grams and so on. The order is the
+    #    index.
+
+    def one_window(window, matrix):
+        """
+        Generate Markov models and compute th compression length on the last character for one window.
+        """
+        models = [Counter() for o in range(max_order + 1)]
+        # -- The 0 order model counts 1-grams, the 1 order model counts 2-grams and so on. The order is the
+        #    index.
+
+        for i in range(len(window) - 1): # ignore the last character of the context window (that one we predict)
+            for order, model in enumerate(models):
+                if i >= order:
+                    ngram = window[i - (order):i + 1]
+                    assert len(ngram) == order + 1, f'{i=}, {order=}'
+
+                    models[order][ngram] += 1
+
+        target = window[-1]
+        for order, model in enumerate(models):
+            ngram = window[-order-1:]
+            assert len(ngram) == order + 1, f'{i=}, {order=}'
+
+            for i, l in enumerate(lambdas):
+                denom = context-1 if order == 0 else models[order-1][ngram[:-1]]
+                logprob = log2(models[order][ngram] + l) - log2(denom + l * numtokens)
+                codelength = -logprob
+
+                matrix[order][i] += codelength
+
+    sums = torch.zeros(max_order+1, len(lambdas))
+    for _ in ran(train_windows):
+        fr = random.randrange(0, len(train)-context)
+        window = train[fr : fr+context]
+        one_window(window, sums)
+
+    res = sums / (train_windows - context)
+
+    l_indices = res.min(dim=1)[1]
+    if verbose:
+        print('Lambdas chosen', l_indices)
+
+    sums = torch.zeros(max_order+1, len(lambdas))
+    for _ in ran(test_windows):
+        fr = random.randrange(0, len(test)-context)
+        window = train[fr : fr+context]
+        one_window(window, sums)
+
+    res = sums / (test_windows - context)
+
+    return res[range(max_order+1), l_indices]
+
 def codelength(models, data, len_train, numtokens, smoothing, verbose=False):
 
     ran = tqdm.trange if verbose else range
@@ -243,7 +315,7 @@ def codelength(models, data, len_train, numtokens, smoothing, verbose=False):
 
 
 
-def sample_sequence(model, seed, max_context, num_tokens, length=600, temperature=0.5, conditional=None):
+def sample_sequence(model, seed, max_context, num_tokens, length=600, temperature=0.5, conditional=None, verbose=False):
     """
     Sequentially samples a batch of sequences from the model, token by token.
 
@@ -261,8 +333,9 @@ def sample_sequence(model, seed, max_context, num_tokens, length=600, temperatur
     sequence = seed.detach().clone()
 
     # sequence = sequence[None, :].expand(batch_size, b)
+    rng = trange if verbose else range
 
-    for _ in range(length):
+    for _ in rng(length):
 
         # Input is the tail end of the sampled sequence (as many tokens as the model can handle)
         input = sequence[:, -max_context:]

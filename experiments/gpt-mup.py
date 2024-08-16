@@ -161,6 +161,7 @@ def go(
          source='transformer',        # Source data generator (transformer, uniform, ndfa, pointwise)
          source_order=3,              # Order for the Markov data generator
          source_alpha=0.5,            # alpha for the pointwise generator
+         sequential=False,            # Whether to use a sequential sampling model (very slow)
          nl_source='relu',
          nl_target='relu',
          kqnorm=False,
@@ -264,12 +265,16 @@ def go(
     # -- generator(batch_size) generates a batch of source data.
 
     if source == 'transformer':
-        cmp_source = up.GTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context,
+
+        if sequential:
+            source = up.ConditionalTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context,
+                        num_tokens=NUM_TOKENS)
+        else:
+            cmp_source = up.GTransformer(emb=swidth, heads=sheads, depth=sdepth, seq_length=context,
                                      num_tokens=NUM_TOKENS, nl=nl(nl_source), mask_channel=True)
 
         if torch.cuda.is_available():
             cmp_source.cuda()
-
         if dp:
             cmp_source = torch.nn.DataParallel(cmp_source)
 
@@ -283,11 +288,14 @@ def go(
             tic()
             with torch.no_grad():
                 # Re-initialize the source
-
                 if old_init:
                     up.weights_init(cmp_source, init_mult_max=50.0, mask_prob_max=0.7)
                 else:
-                    up.weights_init_mup(cmp_source, mult1=weight_mult1, mult2=weight_mult2, multb=weight_multb,
+                    if sequential:
+                        up.weights_init_mup_seq(cmp_source, mult1=weight_mult1, mult2=weight_mult2, multb=weight_multb,
+                                            mask=source_mask)
+                    else:
+                        up.weights_init_mup(cmp_source, mult1=weight_mult1, mult2=weight_mult2, multb=weight_multb,
                                         mask=source_mask)
 
                 # slice a random selection of rows from the buffer (without replacement)
@@ -301,23 +309,30 @@ def go(
                 uniform = torch.randint(low=0, high=NUM_TOKENS, size=(source_microbatch_size, context), device=d())
                 z[mask] = uniform[mask]
 
-                # pass it through a randomly chosen model
-                output = cmp_source(z)
-
-                # The model generates an output sequence as well as a mask. The final sequence has the output
-                # characters at the masked positions and the input characters at the non-masked positions. The
-                # idea is that this makes it more likely for the model to retain any structure present in the
-                # input.
-                # -- It is theoretically possible for the model to do this without the masking, but it's very
-                #    unlikely with random parameters.
-                chars, mask = output[:, :, :-1], output[:, :, -1]
-
-                chars = sample(chars, temperature=temperature)
-                if idmask:
-                    mask = torch.sigmoid(mask).to(torch.bool)
-                    z[mask] = chars[mask]
+                if sequential:
+                    seed = torch.randint(low=0, high=NUM_TOKENS, size=(source_microbatch_size, 1), device=d())
+                    batch = sample_sequence(source, seed, context, num_tokens=NUM_TOKENS, length=context,
+                                            temperature=temperature,
+                                            conditional=input, verbose=False)
+                    z = batch[:, :-1]
                 else:
-                    z = chars # ignore mask
+                    # pass it through a randomly chosen model
+                    output = cmp_source(z)
+
+                    # The model generates an output sequence as well as a mask. The final sequence has the output
+                    # characters at the masked positions and the input characters at the non-masked positions. The
+                    # idea is that this makes it more likely for the model to retain any structure present in the
+                    # input.
+                    # -- It is theoretically possible for the model to do this without the masking, but it's very
+                    #    unlikely with random parameters.
+                    chars, mask = output[:, :, :-1], output[:, :, -1]
+
+                    chars = sample(chars, temperature=temperature)
+                    if idmask:
+                        mask = torch.sigmoid(mask).to(torch.bool)
+                        z[mask] = chars[mask]
+                    else:
+                        z = chars # ignore mask
 
                 buffer[iz, :] = z
 
