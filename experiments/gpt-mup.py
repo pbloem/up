@@ -188,6 +188,7 @@ def go(
          idmask=True,                  # Whether to apply the id mask trick (replacing some output values by the input) --
          sdepth=None,
          subcontext=64,                # Maximum context to look at when sampling
+         project='up-scaling'
 ):
 
     """
@@ -235,7 +236,7 @@ def go(
     wdname = name
     wd = wandb.init(
         name=name,
-        project='up-scaling',
+        project=project,
         config=locals(),
         mode= 'disabled' if debug else 'online'
     )
