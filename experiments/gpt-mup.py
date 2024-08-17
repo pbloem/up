@@ -230,6 +230,8 @@ def go(
     weight_mult1 = rsamp(weight_mult1)
     weight_mult2 = rsamp(weight_mult2)
     weight_multb = rsamp(weight_multb)
+    temperature = rsamp(temperature)
+
     idmask = dsamp(idmask)
     source_mask = dsamp(source_mask)
 
