@@ -113,6 +113,20 @@ def get_flops(model, batch_size, ctx, backward=False):
 
     return total_flops
 
+def rsamp(x):
+    if type(x) in (tuple, list):
+        mi, ma = min(x), max(x)
+        rng = ma - mi
+        return random.random() * rng + mi
+
+    return x
+
+def dsamp(x):
+    if type(x) in (tuple, list):
+        return random.choice(x)
+
+    return x
+
 def go(
          width : int,               # Scaling step for the width (steps of 64)
          width_per_step=128,
@@ -209,6 +223,14 @@ def go(
     sdepth = get_depth(swidth) if sdepth is None else sdepth
     sheads = max(swidth//width_per_head, min_heads)
     assert width % heads == 0
+
+    # Sweep parms. If these are tuples, we sample a random value in between two given extremes or, for discrete-valued
+    # parameters, we sample from a range of options.
+    weight_mult1 = rsamp(weight_mult1)
+    weight_mult2 = rsamp(weight_mult2)
+    weight_multb = rsamp(weight_multb)
+    idmask = dsamp(idmask)
+    source_mask = dsamp(source_mask)
 
     wdname = name
     wd = wandb.init(
