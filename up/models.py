@@ -5,10 +5,145 @@ import torch.nn.functional as F
 from former import TransformerBlock, SelfAttention, Attention
 from former.util import d
 
-import random, math
+import random, math, tqdm
 
 from .util import Reshape, kl_loss, vae_sample, coords, Lambda
 
+class ReservoirNet(nn.Module):
+    """
+    Reservoir network/Echo state network/Liquid state machine
+    """
+    def __init__(self, emb, num_tokens, conn = 8, nl=torch.tanh, init_var=0.1, max_out=8):
+        super().__init__()
+
+        self.emb = emb
+        self.num_tokens = num_tokens
+        self.outtokens = random.randrange(2, max_out + 1)
+
+        # input embeddings
+        self.token_embedding = nn.Embedding(num_embeddings=num_tokens, embedding_dim=emb)
+
+        # The reservoir
+        a = torch.randn(emb, conn) * math.sqrt(init_var) # nonzero part of the matrix
+        a = torch.cat([a, torch.zeros(emb, emb-conn)], dim=1)
+        # -- shuffle along the rows ()
+        rows = []
+        for row in a:
+            row = row[torch.randperm(emb)]
+            rows.append(row[None, :])
+        a = torch.cat(rows, dim=0)
+        # print(a)
+
+        self.register_buffer('a', a)
+        self.register_buffer('initial', torch.zeros(emb))
+        self.nl = nl
+
+        # output layer
+        self.to_prob = nn.Linear(emb, num_tokens)
+
+        # Initialize the weight for `outtokens` random output tokens, with the rest getting zero prob.
+        linweight = torch.ones(size=(self.outtokens, emb))
+        rest = torch.zeros(size=(num_tokens - self.outtokens, emb))
+        torch.nn.init.kaiming_uniform_(linweight, a=math.sqrt(5))
+        linweight = torch.cat([linweight, rest], dim=0)
+
+        # The bias ensures that the masked out tokens get logits -inf
+        linbias = torch.zeros(size=(self.outtokens,))
+        rest = torch.full(size=(num_tokens - self.outtokens,), fill_value=float('-inf'))
+        linbias = torch.cat([linbias, rest], dim=0)
+
+        perm = torch.randperm(num_tokens)
+        linweight, linbias = linweight[perm], linbias[perm]
+
+        self.to_prob.weight.data.copy_(linweight)
+        self.to_prob.bias.data.copy_(linbias)
+
+    def forward(self, x):
+
+        b, l = x.size()
+        e = self.emb
+        x = self.token_embedding(x)
+
+        h = self.initial[None, :].expand(b, 1, e)
+
+        hs = []
+        for i in range(l):
+            # print(self.a[None, :, :].size(), h.size())
+            # exit()
+
+            # multiply the previous state by the reservoir
+            h = torch.matmul(h, self.a[None, :, :].transpose(1, 2))
+            h = h + x[:, i:i+1, :]       # force from the input
+            h = self.nl(h)               # Non-linearity
+
+            hs.append(h.clone())
+
+        hs = torch.cat(hs, dim=1)
+        assert hs.size() == (b, l, e), f'{hs.size()=}'
+
+        res = self.to_prob(hs)
+        assert res.size() == (b, l, self.num_tokens)
+
+        return res
+
+    def lyapunov(self, units=32, burnin=1000, sim=1000, gamma0=1e-12, eps=1e-16):
+        """
+        Estimates the Lyapunov exponent of the system under a uniform random drive
+
+        Uses the method described in Sprott 2003 and Boedecker 2012.
+
+        :param units: Number of units (dimensions of the hidden state) to average the estimate over
+        :param burnin: Number of simulation steps to wait
+        :param sim: Number of simulation steps to estimate over
+        :return:
+        """
+
+        with torch.no_grad():
+            e = self.emb
+            sum_units = 0.0
+
+            # These calculations are best done in high precisions
+            a = self.a.to(torch.float64)
+
+            def step(y, token):
+                """
+                One step of the "simulation" for a particular input token and hidden state y,
+                """
+                inp = self.token_embedding(torch.tensor([token])[None, :])
+
+                y = torch.matmul(y, a[None, :, :].transpose(1, 2))
+                y = y + inp  # force from the input
+                return self.nl(y)
+
+            estimates = []
+            for _ in range(units):
+                unit = random.randrange(self.emb)
+
+                h = self.initial[None, :].expand(1, 1, e).to(torch.float64) # main
+                for i in range(burnin):
+                    # advance the simulation one step
+                    h = step(h, token=random.randrange(self.num_tokens))
+
+                g = h.clone()
+                g[0, 0, unit] += gamma0  # perturb g
+
+                gammas = []
+                for i in range(sim):
+
+                    # advance both simulations one step
+                    token = random.randrange(self.num_tokens)
+                    h = step(h, token=token)
+                    g = step(g, token=token)
+
+                    gammas.append((h-g).norm(2).item())
+                    # adjust g to keep the trajectories close
+                    g = h + (gamma0/(gammas[-1] + eps) ) * (g - h)
+
+                estimates.append(sum(math.log(gammak/gamma0 + eps) for gammak in gammas) / len(gammas))
+                # print(estimates[-1], gammas[:5], gammas[-5:])
+
+            # print(estimates)
+            return sum(estimates) / len(estimates)
 class TransformerBlock(nn.Module):
     """
     A straightforward transformer block.

@@ -11,9 +11,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 import up
-from up.util import d, sample, sample_sequence
-
-from tqdm import trange
+from up.util import d, sample, sample_sequence, clean, ca
+import json
+from tqdm import trange, tqdm
 
 def go(
         n=1000,                   # number of samples to take (points in the scatterplot
@@ -282,7 +282,6 @@ def mup_sample(
     num_tokens = 256
     width = heads * widthperhead
 
-
     for _ in range(samples):
         # Initialize the source model
         source = up.GTransformer(emb=width, heads=heads, depth=get_depth(width), seq_length=context, num_tokens=num_tokens,
@@ -390,6 +389,58 @@ def example(
         for seq in chars.tolist():
             # print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
             print_batch(chars, True)
+
+def test_echo(bs=4, emb=256, conn=8, num_tokens=256, context=512, temperature=1, var=1e-8, reps=10):
+
+    model = up.ReservoirNet(emb=emb, conn=conn, num_tokens=num_tokens, init_var=var, nl=torch.tanh)
+    lexp = model.lyapunov(gamma0=1e-12)
+    print('lyapunov exponent', lexp)
+
+    input = torch.randint(low=0, high=num_tokens, size=(bs, context), device=d())
+    for r in range(reps):
+        model = up.ReservoirNet(emb=emb, conn=conn, num_tokens=num_tokens, init_var=var, nl=torch.tanh)
+        output = model(input)
+
+        chars = sample(output, temperature=temperature)
+
+        if (r % 10 == 0):
+            print(r, '---')
+            for seq in chars.tolist():
+                print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
+                # print_batch(chars, True)
+
+        input = chars
+
+def plot_lyapunov(emb=256, conn=8, num_tokens=256, max_out=8, temperature=1, var=1e-8, reps=10, num=10, rng=(-2,2), cache=None):
+
+
+    if cache is not None:
+        with open(cache, 'r') as file:
+            res = json.load(file)
+            xs, ys = res['xs'], res['ys']
+    else:
+        vars = np.logspace(rng[0], rng[1], num=num)
+        xs, ys = [], []
+
+        for var in tqdm(vars):
+            for r in range(reps):
+                model = up.ReservoirNet(emb=emb, conn=conn, num_tokens=num_tokens, init_var=var, nl=torch.tanh)
+                lexp = model.lyapunov(gamma0=1e-12)
+                xs.append(var)
+                ys.append(lexp)
+
+        with open('echo.json', 'w') as file:
+            json.dump(fp=file, obj={'xs':xs, 'ys':ys})
+
+    plt.figure()
+    ax = plt.gca()
+
+    clean(ax)
+    ax.scatter(xs, ys, alpha=0.5, s=2)
+    ax.set_xscale('log')
+
+    plt.savefig('echo.png')
+    plt.savefig('echo.pdf')
 
 def print_batch(batch, ascii_only):
 

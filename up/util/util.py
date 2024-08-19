@@ -380,7 +380,7 @@ def sample(lnprobs, temperature=1.0):
     """
 
     assert not lnprobs.isnan().any()
-    assert not lnprobs.isinf().any()
+    # assert not lnprobs.isinf().any()
 
     if temperature == 0.0:
         return lnprobs.argmax(dim=-1)
