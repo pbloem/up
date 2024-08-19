@@ -411,41 +411,55 @@ def test_echo(bs=4, emb=256, conn=8, num_tokens=256, context=512, temperature=1,
 
         input = chars
 
-def plot_lyapunov(emb=256, conn=8, num_tokens=256, max_out=8, temperature=1, var=1e-8, reps=10, num=10, rng=(-2,2), cache=None):
-
+def plot_lyapunov(emb=256, conn=8, num_tokens=256, max_out=8, rng=(-2,2), cache=None):
 
     if cache is not None:
         with open(cache, 'r') as file:
             res = json.load(file)
             xs, ys = res['xs'], res['ys']
+
+        plt.figure()
+        ax = plt.gca()
+
+        clean(ax)
+        ax.scatter(xs, ys, alpha=0.5, s=2)
+        ax.set_xscale('log')
+
+        plt.savefig('echo.png')
+        plt.savefig('echo.pdf')
+
     else:
-        vars = np.logspace(rng[0], rng[1], num=num)
         xs, ys = [], []
 
-        for var in tqdm(vars):
-            for r in range(reps):
-                model = up.ReservoirNet(emb=emb, conn=conn, num_tokens=num_tokens, init_var=var, nl=torch.tanh)
+        while True:
+            var = 10.0 ** random.uniform(*rng)
+            model = up.ReservoirNet(emb=emb, conn=conn, num_tokens=num_tokens, max_out=max_out, init_var=var, nl=torch.tanh)
 
-                if torch.cuda.is_available():
-                    model.cuda()
+            if torch.cuda.is_available():
+                model.cuda()
 
-                lexp = model.lyapunov(gamma0=1e-12)
+            lexp = model.lyapunov(gamma0=1e-12)
 
-                xs.append(var)
-                ys.append(lexp)
+            xs.append(var)
+            ys.append(lexp)
 
-        with open('echo.json', 'w') as file:
-            json.dump(fp=file, obj={'xs':xs, 'ys':ys})
+            if len(xs) % 5 == 0:
 
-    plt.figure()
-    ax = plt.gca()
+                print(len(xs), ' runs completed.')
 
-    clean(ax)
-    ax.scatter(xs, ys, alpha=0.5, s=2)
-    ax.set_xscale('log')
+                plt.figure()
+                ax = plt.gca()
 
-    plt.savefig('echo.png')
-    plt.savefig('echo.pdf')
+                clean(ax)
+                ax.scatter(xs, ys, alpha=0.5, s=2)
+                ax.set_xscale('log')
+
+                plt.savefig('echo.png')
+                plt.savefig('echo.pdf')
+
+            with open('echo.json', 'w') as file:
+                json.dump(fp=file, obj={'xs':xs, 'ys':ys})
+
 
 def print_batch(batch, ascii_only):
 
