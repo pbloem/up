@@ -188,7 +188,11 @@ def go(
          idmask=True,                  # Whether to apply the id mask trick (replacing some output values by the input) --
          sdepth=None,
          subcontext=64,                # Maximum context to look at when sampling
-         project='up-scaling'
+         project='up-scaling',
+         echo_emb=1024,
+         echo_conn=16,
+         echo_var=0.21,
+         echo_max_out=16
 ):
 
     """
@@ -373,6 +377,52 @@ def go(
                 return batch
 
         generator = generator_trf
+
+    if source == 'echo': # Echo-state network
+
+        # cmp_source = up.ReservoirNet(emb=echo_emb, conn=echo_conn, num_tokens=NUM_TOKENS,
+        #                              max_out=echo_max_out, init_var=echo_var, nl=torch.tanh)
+
+        # if torch.cuda.is_available(): # The reservoir net is more efficient on CPU (bad implementation, I think)
+        #     cmp_source.cuda()
+
+        buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device=d())
+
+        sampletime = -1.0
+
+        def generator_echo(bs):
+
+            # Sample noise from a random model and insert into the buffer
+            tic()
+            with torch.no_grad():
+                cmp_source = up.ReservoirNet(emb=echo_emb, conn=echo_conn, num_tokens=NUM_TOKENS,
+                                             max_out=echo_max_out, init_var=echo_var, nl=torch.tanh)
+
+                # slice a random selection of rows from the buffer (without replacement)
+                iz = random.sample(range(buffer.size(0)), source_microbatch_size)
+                z = buffer[iz, :]
+
+                # replace some random rows with uniform random characters
+                rows = torch.bernoulli(torch.full(size=(source_microbatch_size, 1), fill_value=reset_prob))
+                mask = rows.expand(source_microbatch_size, context).to(torch.bool)
+
+                uniform = torch.randint(low=0, high=NUM_TOKENS, size=(source_microbatch_size, context), device=d())
+                z[mask] = uniform[mask]
+
+                # pass it through a randomly chosen model
+                output = cmp_source(z)
+                chars = sample(output, temperature=temperature)
+                buffer[iz, :] = chars
+
+                # Now slice a separate sample of instances from the buffer.
+                iz = random.sample(range(buffer_size), bs)
+                batch = buffer[iz, :]
+                # -- Using different indices for the source model and the batch makes the sample more like an iid. sample
+                #    (or at least less obviously dependent).
+
+                return batch
+
+        generator = generator_echo
 
     elif source == 'uniform':
         # Simple uniform random noise (for ablations)
