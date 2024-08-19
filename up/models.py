@@ -109,7 +109,7 @@ class ReservoirNet(nn.Module):
                 """
                 One step of the "simulation" for a particular input token and hidden state y,
                 """
-                inp = self.token_embedding(torch.tensor([token])[None, :])
+                inp = self.token_embedding(torch.tensor([token], device=d())[None, :])
 
                 y = torch.matmul(y, a[None, :, :].transpose(1, 2))
                 y = y + inp  # force from the input
