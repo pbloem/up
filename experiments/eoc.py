@@ -425,7 +425,12 @@ def plot_lyapunov(emb=256, conn=8, num_tokens=256, max_out=8, temperature=1, var
         for var in tqdm(vars):
             for r in range(reps):
                 model = up.ReservoirNet(emb=emb, conn=conn, num_tokens=num_tokens, init_var=var, nl=torch.tanh)
+
+                if torch.cuda.is_available():
+                    model.cuda()
+
                 lexp = model.lyapunov(gamma0=1e-12)
+
                 xs.append(var)
                 ys.append(lexp)
 
