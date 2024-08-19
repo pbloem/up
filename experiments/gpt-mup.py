@@ -386,7 +386,7 @@ def go(
         # if torch.cuda.is_available(): # The reservoir net is more efficient on CPU (bad implementation, I think)
         #     cmp_source.cuda()
 
-        buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device=d())
+        buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device='cpu')
 
         sampletime = -1.0
 
@@ -406,7 +406,7 @@ def go(
                 rows = torch.bernoulli(torch.full(size=(source_microbatch_size, 1), fill_value=reset_prob))
                 mask = rows.expand(source_microbatch_size, context).to(torch.bool)
 
-                uniform = torch.randint(low=0, high=NUM_TOKENS, size=(source_microbatch_size, context), device=d())
+                uniform = torch.randint(low=0, high=NUM_TOKENS, size=(source_microbatch_size, context), device='cpu')
                 z[mask] = uniform[mask]
 
                 # pass it through a randomly chosen model
