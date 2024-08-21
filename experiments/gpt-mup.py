@@ -192,7 +192,8 @@ def go(
          echo_emb=1024,
          echo_conn=16,
          echo_var=0.21,
-         echo_max_out=16
+         echo_max_out=16,
+         echo_layers=1                 # Number of layers in the echo state network
 ):
 
     """
@@ -396,7 +397,7 @@ def go(
             tic()
             with torch.no_grad():
                 cmp_source = up.ReservoirNet(emb=echo_emb, conn=echo_conn, num_tokens=NUM_TOKENS,
-                                             max_out=echo_max_out, init_var=echo_var, nl=torch.tanh)
+                                             max_out=echo_max_out, init_var=echo_var, nl=torch.tanh, layers=echo_layers)
 
                 # slice a random selection of rows from the buffer (without replacement)
                 iz = random.sample(range(buffer.size(0)), source_microbatch_size)

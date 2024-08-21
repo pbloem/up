@@ -13,7 +13,7 @@ class ReservoirNet(nn.Module):
     """
     Reservoir network/Echo state network/Liquid state machine
     """
-    def __init__(self, emb, num_tokens, conn = 8, nl=torch.tanh, init_var=0.1, max_out=8):
+    def __init__(self, emb, num_tokens, conn = 8, nl=torch.tanh, init_var=0.1, max_out=8, layers=1):
         super().__init__()
 
         self.emb = emb
@@ -23,18 +23,20 @@ class ReservoirNet(nn.Module):
         # input embeddings
         self.token_embedding = nn.Embedding(num_embeddings=num_tokens, embedding_dim=emb)
 
-        # The reservoir
-        a = torch.randn(emb, conn) * math.sqrt(init_var) # nonzero part of the matrix
-        a = torch.cat([a, torch.zeros(emb, emb-conn)], dim=1)
-        # -- shuffle along the rows ()
-        rows = []
-        for row in a:
-            row = row[torch.randperm(emb)]
-            rows.append(row[None, :])
-        a = torch.cat(rows, dim=0)
-        # print(a)
+        # The reservoir(s)
+        matrices = []
+        for _ in range(layers):
+            a = torch.randn(emb, conn) * math.sqrt(init_var) # nonzero part of the matrix
+            a = torch.cat([a, torch.zeros(emb, emb-conn)], dim=1)
+            # -- shuffle along the rows ()
+            rows = []
+            for row in a:
+                row = row[torch.randperm(emb)]
+                rows.append(row[None, :])
+            a = torch.cat(rows, dim=0)
+            matrices.append(a[None, :, :])
 
-        self.register_buffer('a', a)
+        self.register_buffer('a', torch.cat(matrices, dim=0))
         self.register_buffer('initial', torch.zeros(emb))
         self.nl = nl
 
@@ -64,24 +66,27 @@ class ReservoirNet(nn.Module):
         e = self.emb
         x = self.token_embedding(x)
 
-        h = self.initial[None, :].expand(b, 1, e)
+        for a in self.a:
+            h = self.initial[None, :].expand(b, 1, e)
 
-        hs = []
-        for i in range(l):
-            # print(self.a[None, :, :].size(), h.size())
-            # exit()
+            hs = []
+            for i in range(l):
+                # print(self.a[None, :, :].size(), h.size())
+                # exit()
 
-            # multiply the previous state by the reservoir
-            h = torch.matmul(h, self.a[None, :, :].transpose(1, 2))
-            h = h + x[:, i:i+1, :]       # force from the input
-            h = self.nl(h)               # Non-linearity
+                # multiply the previous state by the reservoir
+                h = torch.matmul(h, a[None, :, :].transpose(1, 2))
+                h = h + x[:, i:i+1, :]       # force from the input
+                h = self.nl(h)               # Non-linearity
 
-            hs.append(h.clone())
+                hs.append(h.clone())
 
-        hs = torch.cat(hs, dim=1)
-        assert hs.size() == (b, l, e), f'{hs.size()=}'
+            hs = torch.cat(hs, dim=1)
+            assert hs.size() == (b, l, e), f'{hs.size()=}'
 
-        res = self.to_prob(hs)
+            x = hs # output becomes next input
+
+        res = self.to_prob(x)
         assert res.size() == (b, l, self.num_tokens)
 
         return res
@@ -103,23 +108,31 @@ class ReservoirNet(nn.Module):
             sum_units = 0.0
 
             # These calculations are best done in high precisions
-            a = self.a.to(torch.float64)
+            matrices = self.a.to(torch.float64)
 
             def step(y, token):
                 """
                 One step of the "simulation" for a particular input token and hidden state y,
                 """
-                inp = self.token_embedding(torch.tensor([token], device=d())[None, :])
 
-                y = torch.matmul(y, a[None, :, :].transpose(1, 2))
-                y = y + inp  # force from the input
-                return self.nl(y)
+                b, l, e = y.size()
+                assert l == matrices.size(0), f'{l} {matrices.size()}'
+
+                inp = self.token_embedding(torch.tensor([token], device=d())[None, :])
+                out = []
+                for i, a in enumerate(matrices):
+                    h = torch.matmul(y[:, i:i+1, :], a[None, :, :].transpose(1, 2))
+                    h = h + inp  # force from the input
+                    inp = self.nl(h)
+                    out.append(inp)
+
+                return torch.cat(out, dim=1)
 
             estimates = []
             for _ in range(units):
                 unit = random.randrange(self.emb)
 
-                h = self.initial[None, :].expand(1, 1, e).to(torch.float64) # main
+                h = self.initial[None, :].expand(1, self.a.size(0), e).to(torch.float64) # main
                 for i in range(burnin):
                     # advance the simulation one step
                     h = step(h, token=random.randrange(self.num_tokens))
@@ -135,7 +148,7 @@ class ReservoirNet(nn.Module):
                     h = step(h, token=token)
                     g = step(g, token=token)
 
-                    gammas.append((h-g).norm(2).item())
+                    gammas.append((h[:, -1, :]-g[:, -1, :]).norm(2).item())
                     # adjust g to keep the trajectories close
                     g = h + (gamma0/(gammas[-1] + eps) ) * (g - h)
 
