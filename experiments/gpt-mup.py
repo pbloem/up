@@ -637,13 +637,10 @@ def go(
                     g['lr'] += g['lr_delta'] * batch.size(0)
 
         if cooldown > 0 and instances_seen > warmup:
-            if instances_seen > last_cooldown + cooldown:
 
                 # halve all the learning rates
                 for g in opt.param_groups:
-                    g['lr'] *= 0.5
-
-                last_cooldown = instances_seen
+                    g['lr'] *= cooldown
 
         if i % print_every == 0:
 
