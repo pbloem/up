@@ -145,7 +145,8 @@ def go(
          base_lr=3e-4,                # Base learning rate at width0
          debug=False,
          warmup=100_000,
-         eval_every=500_000,            # How often (in microbatches) to evaluate
+         cooldown=-1,                 # After the warmup finishes, we cool down by halving the lr every `cooldown` instances
+         eval_every=500_000,          # How often (in microbatches) to evaluate
          print_every=500,             # How often to print the source output
          gc=1.0,                      # Gradient clipping.
          eval_samples=10_000,         # On how many samples to evaluate
@@ -290,6 +291,7 @@ def go(
             g['lr_delta'] = g['lr'] / warmup
 
             g['lr'] = 0.0
+    last_cooldown = 0
 
     print(opt)
 
@@ -633,6 +635,14 @@ def go(
             for g in opt.param_groups:
                 if g['lr'] < g['max_lr']:
                     g['lr'] += g['lr_delta'] * batch.size(0)
+
+        if cooldown > 0:
+            if instances_seen - last_cooldown > cooldown:
+
+                for g in opt.param_groups:
+                    g['lr'] *= 0.5
+
+                last_cooldown = instances_seen
 
         if i % print_every == 0:
 
