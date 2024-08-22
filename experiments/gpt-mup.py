@@ -381,7 +381,7 @@ def go(
 
         generator = generator_trf
 
-    if source == 'echo': # Echo-state network
+    elif source == 'echo': # Echo-state network
 
         # cmp_source = up.ReservoirNet(emb=echo_emb, conn=echo_conn, num_tokens=NUM_TOKENS,
         #                              max_out=echo_max_out, init_var=echo_var, nl=torch.tanh)
