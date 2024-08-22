@@ -640,7 +640,7 @@ def go(
 
                 # halve all the learning rates
                 for g in opt.param_groups:
-                    g['lr'] *= cooldown
+                    g['lr'] *= cooldown ** batch.size(0)
 
         if i % print_every == 0:
 
