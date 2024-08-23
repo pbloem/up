@@ -631,16 +631,14 @@ def go(
         if mbwarmup > 0 and mbraw < macrobatch_size and instances_seen > mb_start:
             mbraw += mbdelta * batch.size(0)
 
-        if warmup > 0:
+        if warmup > 0 and instances_seen <= warmup:
             for g in opt.param_groups:
                 if g['lr'] < g['max_lr']:
                     g['lr'] += g['lr_delta'] * batch.size(0)
 
         if cooldown > 0 and instances_seen > warmup:
-
-                # halve all the learning rates
-                for g in opt.param_groups:
-                    g['lr'] *= cooldown ** batch.size(0)
+            for g in opt.param_groups:
+                g['lr'] *= cooldown ** batch.size(0)
 
         if i % print_every == 0:
 
