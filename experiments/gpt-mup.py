@@ -291,6 +291,10 @@ def go(
             g['lr_delta'] = g['lr'] / warmup
 
             g['lr'] = 0.0
+
+    cooldown_rate = 0.5 ** (1/cooldown)
+    # -- The cooldown rate is given in the number of instances to halve the learning rate over. This is the resulting
+    #    multiplier per instance.
     last_cooldown = warmup
 
     print(opt)
@@ -638,7 +642,7 @@ def go(
 
         if cooldown > 0 and instances_seen > warmup:
             for g in opt.param_groups:
-                g['lr'] *= cooldown ** batch.size(0)
+                g['lr'] *= cooldown_rate ** batch.size(0)
 
         if i % print_every == 0:
 
