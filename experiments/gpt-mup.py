@@ -127,6 +127,61 @@ def dsamp(x):
 
     return x
 
+def antisol_batch(model, batch, num=5, seed_length=5, context=64, verbose=False):
+    """
+    Replaces `num` instances in the batch by by anti-Solomonoff instances generated from `model`
+    :param model:
+    :param batch:
+    :param num:
+    :param seed_length:
+    :param context: Max context to use. Shortening this can speed up generation, but worsens the quality of the
+        generated string.
+    :return:
+    """
+    b, l = batch.size()
+
+    assert b >= num
+    idxs = random.sample(population=range(b), k=num)
+    seeds = batch[idxs, :seed_length]
+
+    with torch.no_grad():
+        as_strings = antisol(model, seeds, length=l, context=context, verbose=verbose)
+
+    batch[idxs, :] = as_strings
+
+def antisol(model, seeds, length, context, verbose=False):
+    """
+    Samples anti-Solomonoff strings from the model for the given batch of seeds
+
+    :param model:
+    :param seeds:
+    :param length:
+    :return:
+    """
+
+    b, sl = seeds.size()
+    sequence = seeds.detach().clone()
+
+    for _ in range(length - sl):
+
+        # Input is the tail end of the sampled sequence (as many tokens as the model can handle)
+        input = sequence[:, -context:]
+
+        # Run the current input through the model
+        output = model(input)
+
+        # Take the least probable token as a "sample"
+        samples = output[:, -1, :].argmin(dim=-1) # Note the arg_min_
+        assert samples.size() == (b, )
+
+        sequence = torch.cat( (sequence, samples[:, None]), dim=1) # Append the sampled token to the sequence
+
+    if verbose:
+        print('anti-Solomonoff strings')
+        print_batch(sequence, False)
+
+    return sequence
+
 def go(
          width : int,               # Scaling step for the width (steps of 64)
          width_per_step=128,
@@ -194,7 +249,9 @@ def go(
          echo_conn=16,
          echo_var=0.21,
          echo_max_out=16,
-         echo_layers=1                 # Number of layers in the echo state network
+         echo_layers=1,                 # Number of layers in the echo state network
+         anti_sol_num=0,                # How many anti-Solomonoff strings to generate per batch
+         anti_sol_context=64,           # Size of context to use for generating anti-Solomonoff strings
 ):
 
     """
@@ -557,6 +614,10 @@ def go(
         # (i.e. we leave memory empty).
 
         batch = generator(bs)
+
+        if anti_sol_num > 0:
+            # Generate some anti-Solomonoff instances
+            antisol_batch(model, batch=batch, num=anti_sol_num, context=anti_sol_context, verbose=i%10==0)
 
         if torch.cuda.is_available():
             batch = batch.cuda()

@@ -15,6 +15,8 @@ from up.util import d, sample, sample_sequence, clean, ca
 import json
 from tqdm import trange, tqdm
 
+from collections import Counter
+
 def go(
         n=1000,                   # number of samples to take (points in the scatterplot
         batch_size=40,            #
@@ -390,15 +392,16 @@ def example(
             # print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
             print_batch(chars, True)
 
-def test_echo(bs=4, emb=256, conn=8, num_tokens=256, context=512, temperature=1, var=1e-8, reps=10):
+def test_echo(bs=4, emb=256, conn=8, num_tokens=256, context=512, temperature=1, var=0.472, reps=50, layers=1):
 
-    model = up.ReservoirNet(emb=emb, conn=conn, num_tokens=num_tokens, init_var=var, nl=torch.tanh)
+    model = up.ReservoirNet(emb=emb, conn=conn, num_tokens=num_tokens, init_var=var, nl=torch.tanh, layers=layers)
     lexp = model.lyapunov(gamma0=1e-12)
     print('lyapunov exponent', lexp)
 
+    exit()
     input = torch.randint(low=0, high=num_tokens, size=(bs, context), device=d())
     for r in range(reps):
-        model = up.ReservoirNet(emb=emb, conn=conn, num_tokens=num_tokens, init_var=var, nl=torch.tanh)
+        model = up.ReservoirNet(emb=emb, conn=conn, num_tokens=num_tokens, init_var=var, nl=torch.tanh, layers=layers)
         output = model(input)
 
         chars = sample(output, temperature=temperature)
@@ -487,6 +490,69 @@ def nl(name : str):
         return lambda x : torch.sigmoid(x * 10**-temp)
 
     raise Exception(f'Nonlinearity {name} not recognized.')
+
+def freqmodel(seq, degree):
+
+    ctr = Counter()
+
+    for i in range(len(seq) - degree +1):
+        ctr[tuple(seq[i:i+degree])] += 1
+
+    return ctr
+
+def anti(vocab=[0, 1, 2, 3, 4], seed=[4, 1, 3], n=600, lam=1e-8, degree=3):
+    """
+    A small test of the anti-Solomonoff principle. The idea is that given a sequence model (class) C, by actively
+    predicting away from it, we are sampling a sequence that is incompressible with respect to C, but that is fully
+    determined from its seed given an oracle for C. This means we get a string that has, in some sense, a more interesting
+    and predictable structure than C can currently understand.
+
+    The hope is that training C on such strings, helps it to grow to greater computational complexity.
+
+    :param vocab:
+    :param seed:
+    :param n:
+    :param lam:
+    :param degree:
+    :return:
+    """
+
+    v = len(vocab)
+
+    ctr0 = freqmodel(seed[:-1], degree - 1) if degree > 1 else None
+    ctr1 = freqmodel(seed, degree)
+
+    for _ in range(n):
+        pref = tuple(seed[-degree+1:])
+        if ctr0 is not None:
+            probs = [ (ctr1[pref + (t,)] + lam) / (ctr0[pref] + v * lam) for t in vocab]
+        else:
+            probs = [(ctr1[(t,)] + lam) / (len(seed) + v * lam) for t in vocab]
+
+        probs = np.asarray(probs)
+
+        assert abs(sum(probs) - 1.0) < 1e-8, f'{sum(probs)} \t {probs} {ctr1}'
+
+        # sample = np.argmin(probs)
+        sample = random.choice(np.where(probs == probs.min())[0])
+
+        seed.append(sample)
+
+        ctr1[tuple(seed[-degree:])] += 1
+
+        if ctr0 is not None:
+            ctr0[tuple(seed[-degree:-1])] += 1
+
+    for i, s in enumerate(seed):
+        print(s, end='')
+        # if i > 0 and seed[i-1] == s:
+        #     print('!', end='')
+
+    print()
+
+
+
+
 
 if __name__ == '__main__':
     fire.Fire()
