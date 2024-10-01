@@ -179,6 +179,7 @@ def antisol(model, seeds, length, context, verbose=False):
     if verbose:
         print('anti-Solomonoff strings')
         print_batch(sequence, False)
+        print('\n\n')
 
     return sequence
 
@@ -617,7 +618,7 @@ def go(
 
         if anti_sol_num > 0:
             # Generate some anti-Solomonoff instances
-            antisol_batch(model, batch=batch, num=anti_sol_num, context=anti_sol_context, verbose=i%10==0)
+            antisol_batch(model, batch=batch, num=anti_sol_num, context=anti_sol_context, verbose=i%print_every==0)
 
         if torch.cuda.is_available():
             batch = batch.cuda()
@@ -709,6 +710,7 @@ def go(
 
             print('target samples', i)
             print_batch(batch[:4, :], False)
+            print('\n\n')
 
         if freeze_blocks >  0:
             if last_unfrozen < depth:
