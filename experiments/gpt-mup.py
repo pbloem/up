@@ -1,5 +1,5 @@
 import up
-from up.util import tic, toc, coords, d, sample, sample_sequence, gradient_norm
+from up.util import tic, toc, coords, d, sample, sample_sequence, gradient_norm, remap
 from up.data import load_data, cas, gen_autseq
 from up import ProgTransformerBlock
 
@@ -127,7 +127,7 @@ def dsamp(x):
 
     return x
 
-def antisol_batch(model, batch, num=5, seed_length=5, context=64, verbose=False):
+def antisol_batch(model, batch, numchars, num=5, seed_length=5, context=64, verbose=False, use_mask=False):
     """
     Replaces `num` instances in the batch by by anti-Solomonoff instances generated from `model`
     :param model:
@@ -136,6 +136,7 @@ def antisol_batch(model, batch, num=5, seed_length=5, context=64, verbose=False)
     :param seed_length:
     :param context: Max context to use. Shortening this can speed up generation, but worsens the quality of the
         generated string.
+    :param mask: Limit the sampled characters to those in the seed and mask the rest.
     :return:
     """
     b, l = batch.size()
@@ -144,12 +145,21 @@ def antisol_batch(model, batch, num=5, seed_length=5, context=64, verbose=False)
     idxs = random.sample(population=range(b), k=num)
     seeds = batch[idxs, :seed_length]
 
+    if use_mask:
+        wlist = [set(chars.tolist()) for chars in seeds]
+        mask = [[c for c in range(numchars) if c not in wl] for wl in wlist]
+        # -- All the characters not in the seed for each instance in the batch
+        # -- I can't think of a parallelized way to implement the masking. Here's hoping the impact is minimal.
+        #    This might be a bit expensive for large token vocabs.
+        # -- If the seed contains only one character, the sampled sequence is necessarily that same character repeated.
+        #    For now, that doesn't seem too bad (it's a worthwhile pattern to learn from, and it should be rare).
+
     with torch.no_grad():
-        as_strings = antisol(model, seeds, length=l, context=context, verbose=verbose)
+        as_strings = antisol(model, seeds, length=l, context=context, verbose=verbose, mask=mask if use_mask else None)
 
     batch[idxs, :] = as_strings
 
-def antisol(model, seeds, length, context, verbose=False):
+def antisol(model, seeds, length, context, verbose=False, mask=None):
     """
     Samples anti-Solomonoff strings from the model for the given batch of seeds
 
@@ -170,15 +180,25 @@ def antisol(model, seeds, length, context, verbose=False):
         # Run the current input through the model
         output = model(input)
 
-        # Take the least probable token as a "sample"
-        samples = output[:, -1, :].argmin(dim=-1) # Note the arg_min_
-        assert samples.size() == (b, )
+        if mask is None:
+            # Take the least probable token as a "sample"
+            samples = output[:, -1, :].argmin(dim=-1) # Note the arg_min_
+            assert samples.size() == (b, )
+        else:
+            samples = []
+            output = output.detach().clone()
+            for inst, imask in zip(output[:, -1, :], mask):
+                inst[imask] = float('inf')
+                samples.append(inst.argmin().item())
+            samples = torch.tensor(samples, device=seeds.device)
 
         sequence = torch.cat( (sequence, samples[:, None]), dim=1) # Append the sampled token to the sequence
 
     if verbose:
         print('anti-Solomonoff strings')
-        print_batch(sequence, False)
+        for inst in sequence:
+            inst = remap(inst.tolist())
+            print(''.join(str(c) for c in inst))
         print('\n\n')
 
     return sequence
@@ -618,7 +638,8 @@ def go(
 
         if anti_sol_num > 0:
             # Generate some anti-Solomonoff instances
-            antisol_batch(model, batch=batch, num=anti_sol_num, context=anti_sol_context, verbose=i%print_every==0)
+            antisol_batch(model, batch=batch, num=anti_sol_num, context=anti_sol_context, verbose=i%print_every==0,
+                          numchars=NUM_TOKENS, use_mask=True)
 
         if torch.cuda.is_available():
             batch = batch.cuda()
@@ -709,7 +730,9 @@ def go(
         if i % print_every == 0:
 
             print('target samples', i)
-            print_batch(batch[:4, :], False)
+            for inst in batch[:4, :]:
+                inst = remap(inst.tolist())
+                print(''.join(str(c) for c in inst))
             print('\n\n')
 
         if freeze_blocks >  0:

@@ -1,3 +1,5 @@
+import string
+
 import wget, os, gzip, pickle, random, re, sys
 
 from former.util import enwik8_bytes
@@ -247,15 +249,16 @@ def to_str(ls):
 
     return res
 
+PRINTABLE = set(string.digits + string.ascii_letters + string.punctuation)
+#-- NB we don't print whitespace
 def cas(i):
     """
     Character-as-string. Filters out the ascii codes that aren't safe to print.
 
-    128-160 are automatically printed as a "null" box .
     :return:
     """
     assert i >= 0 and i < 256
-    return str(chr(128)) if (i < 33) else str(chr(i))
+    return '□' if i not in PRINTABLE else str(chr(i))
 
 def load_str(name='dyck', num_chars=100_000, final=False):
     res = load_data(name, num_chars, final)

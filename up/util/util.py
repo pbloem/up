@@ -678,7 +678,7 @@ def measure_gzip(data_ints):
 
 def remap(seq, lim=99):
     """
-    Remaps a sequence of element by frequency. That is, the most frequent elemnt is mapped to the integer 0, the second
+    Remaps a sequence of element by frequency. That is, the most frequent element is mapped to the integer 0, the second
     most frequent to 1 and so on.
 
     :param seq:
