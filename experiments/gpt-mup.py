@@ -453,6 +453,12 @@ def go(
 
                 buffer[iz, :] = z
 
+                if anti_sol_num > 0:
+                    # Generate some anti-Solomonoff instances.
+                    antisol_batch(model, batch=buffer, num=anti_sol_num, context=anti_sol_context,
+                                  verbose=random.random() < 0.001,
+                                  numchars=NUM_TOKENS, use_mask=True)
+
                 # Now slice a separate sample of instances from the buffer.
                 iz = random.sample(range(buffer_size), bs)
                 batch = buffer[iz, :]
@@ -635,11 +641,6 @@ def go(
         # (i.e. we leave memory empty).
 
         batch = generator(bs)
-
-        if anti_sol_num > 0:
-            # Generate some anti-Solomonoff instances
-            antisol_batch(model, batch=batch, num=anti_sol_num, context=anti_sol_context, verbose=i%print_every==0,
-                          numchars=NUM_TOKENS, use_mask=True)
 
         if torch.cuda.is_available():
             batch = batch.cuda()
