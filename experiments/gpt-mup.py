@@ -275,7 +275,8 @@ def go(
          anti_sol_context=64,           # Size of context to use for generating anti-Solomonoff strings
          anti_sol_seed=(2,33),          # Size of the seed to use for AS strings. This also determines the vocab.
                                         # Chosen uniform-random from the given range
-         anti_sol_from=0                # How long to wait (in instances) before starting to generate AS strings
+         anti_sol_from=0,               # How long to wait (in instances) before starting to generate AS strings
+         anti_sol_buffer=False          # If true, add the AS strings to the buffer. If false, add them to the batch.
 ):
 
     """
@@ -456,7 +457,7 @@ def go(
 
                 buffer[iz, :] = z
 
-                if anti_sol_num > 0 and instances_seen > anti_sol_from:
+                if anti_sol_buffer and anti_sol_num > 0 and instances_seen > anti_sol_from:
                     # Generate some anti-Solomonoff instances.
                     antisol_batch(model, batch=buffer, num=anti_sol_num, context=anti_sol_context,
                                   verbose=random.random() < 0.001, seed_length=random.randrange(*anti_sol_seed),
@@ -644,6 +645,12 @@ def go(
         # (i.e. we leave memory empty).
 
         batch = generator(bs)
+
+        if not anti_sol_buffer and anti_sol_num > 0 and instances_seen > anti_sol_from:
+            # Generate some anti-Solomonoff instances.
+            antisol_batch(model, batch=batch, num=anti_sol_num, context=anti_sol_context,
+                          verbose=random.random() < 0.001, seed_length=random.randrange(*anti_sol_seed),
+                          numchars=NUM_TOKENS, use_mask=True)
 
         if torch.cuda.is_available():
             batch = batch.cuda()
