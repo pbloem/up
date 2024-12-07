@@ -334,6 +334,157 @@ def mup_sample(
             print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
         print('---')
 
+def lstm_scale(lstm : nn.LSTM, weight_mult=1.0, bias_mult=1.0):
+
+    l = lstm.num_layers
+
+    for k in range(l):
+        for wlist in lstm.all_weights:
+            for w in wlist:
+                w.data *= weight_mult
+
+        for b in getattr(lstm, 'bias_ih_l'+ str(k)), getattr(lstm, 'bias_hh_l'+ str(k)):
+            b.data *= bias_mult
+
+def lstm_sample(
+        emb=128,
+        layers=1,
+        context=512,
+        samples=4,
+        batch_size=4,
+        temperature=1,
+        mult=1,
+        reps=1, # how often to feed the output back into the model
+        usemask=False,
+        inrep=None,
+    ):
+
+    num_tokens = 256
+
+    class Model(nn.Module):
+
+        def __init__(self, emb, mask_channel, layers=1):
+            super().__init__()
+
+            self.emb = emb
+
+            self.token_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=num_tokens)
+            self.lstm = nn.LSTM(emb, emb, num_layers=layers, batch_first=True)
+            self.toprobs = nn.Linear(emb, num_tokens + 1) if mask_channel else nn.Linear(emb, num_tokens)
+
+        def forward(self, x):
+            x = self.token_embedding(x)
+            x = self.lstm(x)[0]
+            x = self.toprobs(x)
+
+            return x
+
+    for _ in range(samples):
+        # Initialize the source model
+        # source = up.GTransformer(emb=width, heads=heads, depth=get_depth(width), seq_length=context, num_tokens=num_tokens,
+        #         nl=nl(nonlinearity), mask_channel=True)
+
+        if inrep is None:
+            chars = torch.randint(low=0, high=num_tokens, size=(batch_size, context), device=d())
+        else:
+            chars = torch.randint(low=0, high=num_tokens, size=(batch_size, inrep), device=d())
+            nrep = int(math.ceil(context / inrep)) # how many repeats
+            chars = chars.tile((1, nrep))[:, :context]
+
+            # for seq in chars.tolist():
+            #     print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
+            # print('---')
+            # exit()
+
+        for _ in range(reps):
+
+            source = Model(emb, mask_channel=False, layers=layers)
+
+            source.token_embedding.weight.data *= 1
+            lstm_scale(source.lstm, mult)
+
+            if torch.cuda.is_available():
+                source.cuda()
+
+            chars = source(chars)
+            chars = sample(chars, temperature=temperature)
+
+        for seq in chars.tolist():
+            print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
+        print('---')
+
+def lstm_sample_auto(
+        emb=128,
+        layers=1,
+        seedlength=5,
+        context=512,
+        samples=4,
+        batch_size=4,
+        temperature=(-1, -4),
+        mult=(0.7, 0.95),
+        reps=1, # how often to feed the output back into the model
+        usemask=False,
+    ):
+
+    num_tokens = 256
+
+    class Model(nn.Module):
+
+        def __init__(self, emb, mask_channel, layers=1):
+            super().__init__()
+
+            self.emb = emb
+
+            self.token_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=num_tokens)
+            self.lstm = nn.LSTM(emb * 2, emb, num_layers=layers, batch_first=True)
+            self.toprobs = nn.Linear(emb, num_tokens + 1) if mask_channel else nn.Linear(emb, num_tokens)
+
+        def forward(self, x, z):
+
+            assert x.size() == z.size(), f'{x.size()} {z.size()}'
+
+            x, z = self.token_embedding(x), self.token_embedding(z)
+
+            x = torch.cat((x, z), dim=-1)
+            x = self.lstm(x)[0]
+
+            x = self.toprobs(x)
+
+            return x
+
+    for _ in range(samples):
+        # Initialize the source model
+        # source = up.GTransformer(emb=width, heads=heads, depth=get_depth(width), seq_length=context, num_tokens=num_tokens,
+        #         nl=nl(nonlinearity), mask_channel=True)
+
+        conds = torch.full(fill_value=0, size=(batch_size, context), device=d(), dtype=torch.long)
+
+        for _ in range(reps):
+            # the seed
+            chars = torch.randint(low=0, high=num_tokens, size=(batch_size, seedlength), device=d())
+
+            source = Model(emb, mask_channel=False, layers=layers)
+            temp_sample = 10 ** np.random.uniform(*temperature)
+            mult_sample = np.random.uniform(*mult)
+
+            print(f'mult {mult_sample:.4} \t temp {np.log10(temp_sample):.4}')
+
+            source.token_embedding.weight.data *= 1
+            lstm_scale(source.lstm, mult_sample)
+
+            if torch.cuda.is_available():
+                source.cuda()
+
+            chars = up.util.sample_sequence(model=source, seed=chars,
+                                            max_context=context, num_tokens=num_tokens,
+                                            length=context-chars.size(1), temperature=temp_sample, conditional=conds)
+
+            conds = chars
+
+        for seq in chars.tolist():
+            print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
+        print('---')
+
 def example(
         widthperhead=128,
         heads=12,
@@ -549,10 +700,6 @@ def anti(vocab=[0, 1, 2, 3, 4], seed=[4, 1, 3], n=600, lam=1e-8, degree=3):
         #     print('!', end='')
 
     print()
-
-
-
-
 
 if __name__ == '__main__':
     fire.Fire()

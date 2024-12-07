@@ -21,6 +21,8 @@ Experiment 1: We train a GPT-style transformer on the Hutter prize data (100MB o
 """
 
 NUM_TOKENS = 256
+LOG2E = math.log2(math.e)
+LOGE2 = math.log(2.0)
 
 def print_batch(batch, ascii_only):
 
@@ -570,7 +572,6 @@ def go(
         source_flops = get_flops(cmp_source, batch_size=source_microbatch_size, ctx=context, backward=False)
         print(f'target (GFLOps): {target_flops / 1e9}, source (GFLOps): {source_flops / 1e9}')
 
-
     results = { # All relevant results, to be saved as a json file after each eval.
         'vals' : {},
         'locals' : locals()
@@ -610,6 +611,7 @@ def go(
                 # Save just the model. This is a bit brittle to code changes, but doesn't require us to save the
                 # hyperparams manually
 
+        ### Evaluate
         if instances_seen - last_eval > eval_every and not skip_eval:
 
             for name, data in datasets.items():
@@ -635,16 +637,28 @@ def go(
             with open(f'./{wdname}.json', 'w') as f:
                 json.dump(results, f, indent=6, default=lambda o: '<not serializable>') # the json is dumped and overwritten every eval
 
+            # Evaluate on simple repeated patterns
+            for r in [1, 3, 10]:
+                bits = repeval(model=model, context=context, rep=r,
+                               batch_size=eval_batch_mult*source_microbatch_size, nbatches=10_000)
+
+                name = f'rep-{r}'
+                wandb.log({f'rval/{name}': bits}, step=instances_seen)
+
+                results['vals'][name]['instances'].append(instances_seen)
+                results['vals'][name]['bits'].append(est)
+                results['vals'][name]['microbatches'].append(i)
+
+        ### Train
         sampletime = toc()
 
         tic()
-        # Perform a training step on batches sampled from the buffer
 
         bs = min(int(round(mbraw)), target_microbatch_size)
-        # If the current macrobatch sizer is smaller than the microbatch size, we go with the smaller value
+        # If the current macrobatch size is smaller than the microbatch size, we go with the smaller value
         # (i.e. we leave memory empty).
 
-        batch = generator(bs)
+        batch = generator(bs) # Sample a training batch (if there is a )
 
         if not anti_sol_buffer and anti_sol_num > 0 and instances_seen > anti_sol_from:
             # Generate some anti-Solomonoff instances.
@@ -697,6 +711,7 @@ def go(
 
         traintime = toc()
 
+        ### Admin
         wandb.log({
             'loss': rloss.item() / (input.size(0) * input.size(1)),
             'sample_time': sampletime,
@@ -905,6 +920,30 @@ def set_lr(lr, opt):
     for g in opt.param_groups:
         g['lr'] = lr
         g['initial_lr'] = lr
+
+
+def repeval(model, context:int, rep:int, batch_size:int, nbatches :int):
+    bits = 0.0
+    tokens = 0.0
+
+    for i in nbatches:
+
+        chars = torch.randint(low=0, high=NUM_TOKENS, size=(batch_size, rep), device=d())
+        nrep = int(math.ceil(context / rep))  # how many repeats
+        chars = chars.tile((1, nrep))[:, :context]
+
+        input  = chars[:, :-1]
+        target = chars[:, 1:]
+
+        output = model(chars)
+
+        batch_nats = F.cross_entropy(output, target, reduction='none')
+        batch_bits = batch_nats * LOG2E
+
+        bits += batch_bits.sum().item()
+        tokens += batch_bits.numel()
+
+    return bits/tokens
 
 
 if __name__ == '__main__':

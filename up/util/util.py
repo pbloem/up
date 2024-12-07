@@ -328,7 +328,7 @@ def sample_sequence(model, seed, max_context, num_tokens, length=600, temperatur
     :return: The sampled sequence, including the seed.
     """
 
-    (b, l) = seed.size()
+    (b, seedlen) = seed.size()
 
     sequence = seed.detach().clone()
 
@@ -344,11 +344,12 @@ def sample_sequence(model, seed, max_context, num_tokens, length=600, temperatur
 
         # Run the current input through the model
         if conditional is not None:
-            to = i + 1
+            to = seedlen + i
             fr = max(0, to - max_context)
             output = model(input, conditional[:, fr:to])
             # -- Note that we only give the model a sliding window view on the conditional. This makes sampling more
             #    efficient.
+            # -- Careful: the conditional should be as long as length + seedlen
         else:
             output = model(input)
         # output = F.log_softmax(output, dim=-1)
