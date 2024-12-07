@@ -627,7 +627,7 @@ def go(
                 wandb.log({f'rval/{name}': bits}, step=instances_seen)
 
                 results['vals'][name]['instances'].append(instances_seen)
-                results['vals'][name]['bits'].append(est)
+                results['vals'][name]['bits'].append(bits)
                 results['vals'][name]['microbatches'].append(i)
 
             for name, data in datasets.items():
