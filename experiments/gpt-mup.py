@@ -940,7 +940,7 @@ def repeval(model, context:int, rep:int, batch_size:int, nbatches :int):
 
         output = model(chars)
 
-        batch_nats = F.cross_entropy(output, target, reduction='none')
+        batch_nats = F.cross_entropy(output.permute(0, 2, 1), target, reduction='none')
         batch_bits = batch_nats * LOG2E
 
         bits += batch_bits.sum().item()
