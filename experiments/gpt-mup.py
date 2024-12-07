@@ -492,7 +492,7 @@ def go(
         We use a buffer to minimize dependence in the samples, just as with the transformer generator.   
         """
 
-        source = up.LSTMGen(lstmemb, )
+        source = up.LSTMGen(lstmemb, num_tokens=NUM_TOKENS)
         if torch.cuda.is_available():
             source.cuda()  # This might not actually be faster, given how small the LSTM is...
 
