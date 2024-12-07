@@ -509,7 +509,7 @@ def go(
             tic()
             with torch.no_grad():
                 # Re-initialize the source
-                source.lstm.reset_parameters()
+                source.reset_parameters()
 
                 temp_sample = 10 ** np.random.uniform(*lstmtemp)
                 mult_sample = np.random.uniform(*lstmmult)

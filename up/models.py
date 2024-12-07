@@ -306,6 +306,12 @@ class LSTMGen(nn.Module):
 
         return x
 
+    def reset_parameters(self):
+
+        self.token_embedding.reset_parameters()
+        self.lstm.reset_parameters()
+        self.toprobs.reset_parameters()
+
 class AE(nn.Module):
 
     def __init__(self, a=16, b=32, c=128, ls=2, krnl=3, res=(64, 64), mlm_offset=0.0, ln_params=True, num_mids=3):
