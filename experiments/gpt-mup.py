@@ -613,6 +613,21 @@ def go(
 
         ### Evaluate
         if instances_seen - last_eval > eval_every and not skip_eval:
+            valbs = int(target_microbatch_size * eval_batch_mult)
+            # Evaluate on simple repeated patterns
+            for r in [1, 3, 10]:
+                print(f'evaluating rep {r}')
+
+                with torch.no_grad():
+                    bits = repeval(model=model, context=context, rep=r,
+                                   batch_size=valbs, nbatches=round(eval_samples/valbs))
+
+                name = f'rep-{r}'
+                wandb.log({f'rval/{name}': bits}, step=instances_seen)
+
+                results['vals'][name]['instances'].append(instances_seen)
+                results['vals'][name]['bits'].append(est)
+                results['vals'][name]['microbatches'].append(i)
 
             for name, data in datasets.items():
                 print(f'evaluating {name}')
@@ -623,7 +638,7 @@ def go(
                         data=data,
                         nsamples=eval_samples,
                         context=context,
-                        batch_size=int(target_microbatch_size * eval_batch_mult),
+                        batch_size=valbs,
                         model_produces_logits=True
                     )
 
@@ -636,18 +651,6 @@ def go(
             last_eval = instances_seen
             with open(f'./{wdname}.json', 'w') as f:
                 json.dump(results, f, indent=6, default=lambda o: '<not serializable>') # the json is dumped and overwritten every eval
-
-            # Evaluate on simple repeated patterns
-            for r in [1, 3, 10]:
-                bits = repeval(model=model, context=context, rep=r,
-                               batch_size=eval_batch_mult*source_microbatch_size, nbatches=10_000)
-
-                name = f'rep-{r}'
-                wandb.log({f'rval/{name}': bits}, step=instances_seen)
-
-                results['vals'][name]['instances'].append(instances_seen)
-                results['vals'][name]['bits'].append(est)
-                results['vals'][name]['microbatches'].append(i)
 
         ### Train
         sampletime = toc()
@@ -926,7 +929,7 @@ def repeval(model, context:int, rep:int, batch_size:int, nbatches :int):
     bits = 0.0
     tokens = 0.0
 
-    for i in nbatches:
+    for i in range(nbatches):
 
         chars = torch.randint(low=0, high=NUM_TOKENS, size=(batch_size, rep), device=d())
         nrep = int(math.ceil(context / rep))  # how many repeats
