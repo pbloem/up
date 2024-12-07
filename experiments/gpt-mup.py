@@ -23,6 +23,7 @@ Experiment 1: We train a GPT-style transformer on the Hutter prize data (100MB o
 NUM_TOKENS = 256
 LOG2E = math.log2(math.e)
 LOGE2 = math.log(2.0)
+REPS = [1, 3, 10]
 
 def print_batch(batch, ascii_only):
 
@@ -577,8 +578,8 @@ def go(
         'locals' : locals()
     }
 
-    for k in datasets.keys():
-        results['vals'][k] = {
+    for name in list(datasets.keys()) + [f'rep-{r}' for r in REPS]:
+        results['vals'][name] = {
             'instances' : [],
             'bits' :  [],
             'microbatches' : [],
@@ -615,7 +616,7 @@ def go(
         if instances_seen - last_eval > eval_every and not skip_eval:
             valbs = int(target_microbatch_size * eval_batch_mult)
             # Evaluate on simple repeated patterns
-            for r in [1, 3, 10]:
+            for r in REPS:
                 print(f'evaluating rep {r}')
 
                 with torch.no_grad():
