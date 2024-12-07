@@ -279,6 +279,33 @@ class VAE(nn.Module):
 
         return self.decoder(zs)
 
+class LSTMGen(nn.Module):
+    """
+    LSTM-badsed generator model
+    """
+
+    def __init__(self, emb, mask_channel, layers=1, num_tokens=256):
+        super().__init__()
+
+        self.emb = emb
+
+        self.token_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=num_tokens)
+        self.lstm = nn.LSTM(emb * 2, emb, num_layers=layers, batch_first=True)
+        self.toprobs = nn.Linear(emb, num_tokens + 1) if mask_channel else nn.Linear(emb, num_tokens)
+
+    def forward(self, x, z):
+
+        assert x.size() == z.size(), f'{x.size()} {z.size()}'
+
+        x, z = self.token_embedding(x), self.token_embedding(z)
+
+        x = torch.cat((x, z), dim=-1)
+        x = self.lstm(x)[0]
+
+        x = self.toprobs(x)
+
+        return x
+
 class AE(nn.Module):
 
     def __init__(self, a=16, b=32, c=128, ls=2, krnl=3, res=(64, 64), mlm_offset=0.0, ln_params=True, num_mids=3):

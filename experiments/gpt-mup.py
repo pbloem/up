@@ -1,6 +1,7 @@
 import up
 from up.util import tic, toc, coords, d, sample, sample_sequence, gradient_norm, remap
 from up.data import load_data, cas, gen_autseq
+
 from up import ProgTransformerBlock
 
 from former.util import d, here, tic, toc, sample_batch, enwik8_string, enwik8_bytes, estimate_compression
@@ -11,6 +12,8 @@ import wandb, random, fire, gzip, math, tqdm, os, json
 import torch
 from torch import nn
 import torch.nn.functional as F
+
+import numpy as np
 
 from tqdm import trange
 
@@ -279,7 +282,11 @@ def go(
          anti_sol_seed=(2,33),          # Size of the seed to use for AS strings. This also determines the vocab.
                                         # Chosen uniform-random from the given range
          anti_sol_from=0,               # How long to wait (in instances) before starting to generate AS strings
-         anti_sol_buffer=False          # If true, add the AS strings to the buffer. If false, add them to the batch.
+         anti_sol_buffer=False,         # If true, add the AS strings to the buffer. If false, add them to the batch.
+         lstmemb=32,
+         lstmmult=(0.1,0.9),
+         lstmtemp=(-1.5,-4.5),
+         lstmseed=8,
 ):
 
     """
@@ -475,6 +482,73 @@ def go(
                 return batch
 
         generator = generator_trf
+
+    elif source == 'lstm':
+        """
+        A source that samples sequentially (autoregressively) from a small LSTM (hidden dim 32 by def). The idea is that 
+        (a) the LSTM has a better inductive bias for causal, patterned sequences (b) becuase of the small size, 
+        autoregressive sampling becomes feasible.
+        
+        We use a buffer to minimize dependence in the samples, just as with the transformer generator.   
+        """
+
+        source = up.LSTMGen(lstmemb, )
+        if torch.cuda.is_available():
+            source.cuda()  # This might not actually be faster, given how small the LSTM is...
+
+        buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, 1), device=d())
+        buffer = buffer.tile((1, context))
+        #-- We init the buffer with constant sequences (i.e. those filled with a single repeating token). This ensures
+        #   that the LSTM is conditioned on a simple sequence and starts by generating highly regular sequences.
+
+        sampletime = -1.0
+
+        def generator_lstm(bs):
+
+            # Sample noise from a random model and insert into the buffer
+            tic()
+            with torch.no_grad():
+                # Re-initialize the source
+                source.reset_parameters()
+
+                temp_sample = 10 ** np.random.uniform(*lstmtemp)
+                mult_sample = np.random.uniform(*lstmmult)
+
+                # print(f'mult {mult_sample:.4} \t temp {np.log10(temp_sample):.4}')
+
+                source.token_embedding.weight.data *= 1
+                lstm_scale(source.lstm, mult_sample)
+
+                # slice a random selection of rows from the buffer (without replacement)
+                iseeds = random.sample(range(buffer.size(0)), source_microbatch_size)
+                iconds = random.sample(range(buffer.size(0)), source_microbatch_size)
+
+                seeds = buffer[iseeds, :lstmseed]
+                conds = buffer[iconds, :]
+
+                # replace some random rows with uniform random characters
+                # rows = torch.bernoulli(torch.full(size=(source_microbatch_size, 1), fill_value=reset_prob))
+                # mask = rows.expand(source_microbatch_size, context).to(torch.bool)
+
+                # uniform = torch.randint(low=0, high=NUM_TOKENS, size=(source_microbatch_size, context), device=d())
+                # z[mask] = uniform[mask]
+
+                chars = up.util.sample_sequence(model=source, seed=seeds,
+                                                max_context=context, num_tokens=NUM_TOKENS,
+                                                length=context - seeds.size(1), temperature=temp_sample,
+                                                conditional=conds)
+
+                buffer[iconds, :] = chars
+
+                # Now slice a separate sample of instances from the buffer.
+                ibatch = random.sample(range(buffer_size), bs)
+                batch = buffer[ibatch, :]
+                # -- Using different indices for the source model and the batch makes the sample more like an iid. sample
+                #    (or at least less obviously dependent).
+
+                return batch
+
+        generator = generator_lstm
 
     elif source == 'echo': # Echo-state network
 
@@ -948,6 +1022,19 @@ def repeval(model, context:int, rep:int, batch_size:int, nbatches :int):
         tokens += batch_bits.numel()
 
     return bits/tokens
+
+def lstm_scale(lstm : nn.LSTM, weight_mult=1.0, bias_mult=1.0):
+
+    l = lstm.num_layers
+
+    for k in range(l):
+        for wlist in lstm.all_weights:
+            for w in wlist:
+                w.data *= weight_mult
+
+        for b in getattr(lstm, 'bias_ih_l'+ str(k)), getattr(lstm, 'bias_hh_l'+ str(k)):
+            b.data *= bias_mult
+
 
 if __name__ == '__main__':
     fire.Fire()
