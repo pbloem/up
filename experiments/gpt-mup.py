@@ -938,7 +938,7 @@ def repeval(model, context:int, rep:int, batch_size:int, nbatches :int):
         input  = chars[:, :-1]
         target = chars[:, 1:]
 
-        output = model(chars)
+        output = model(input)
 
         batch_nats = F.cross_entropy(output.permute(0, 2, 1), target, reduction='none')
         batch_bits = batch_nats * LOG2E
@@ -947,7 +947,6 @@ def repeval(model, context:int, rep:int, batch_size:int, nbatches :int):
         tokens += batch_bits.numel()
 
     return bits/tokens
-
 
 if __name__ == '__main__':
     fire.Fire()
