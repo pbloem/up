@@ -287,6 +287,7 @@ def go(
          lstmmult=(0.1,0.9),
          lstmtemp=(-1.5,-4.5),
          lstmseed=8,
+         lstmreset=(50,50)              # How many instances of the buffer to reset to constant and random sequences resp.
 ):
 
     """
@@ -508,6 +509,19 @@ def go(
             # Sample noise from a random model and insert into the buffer
             tic()
             with torch.no_grad():
+
+                # replace some random rows in the buffer with constant and random sequences
+                con, ran = lstmreset
+
+                crows = torch.randint(low=0, high=NUM_TOKENS, size=(con, 1), device=d())
+                crows = crows.tile((1, context))
+                rrows = torch.randint(low=0, high=NUM_TOKENS, size=(ran, context), device=d())
+
+                rows = torch.cat((crows, rrows), dim=0)
+                idx = random.sample(range(buffer_size), rows.size(0))
+
+                buffer[idx] = rows
+
                 # Re-initialize the source
                 source.reset_parameters()
 
@@ -525,13 +539,6 @@ def go(
 
                 seeds = buffer[iseeds, :lstmseed]
                 conds = buffer[iconds, :]
-
-                # replace some random rows with uniform random characters
-                # rows = torch.bernoulli(torch.full(size=(source_microbatch_size, 1), fill_value=reset_prob))
-                # mask = rows.expand(source_microbatch_size, context).to(torch.bool)
-
-                # uniform = torch.randint(low=0, high=NUM_TOKENS, size=(source_microbatch_size, context), device=d())
-                # z[mask] = uniform[mask]
 
                 chars = up.util.sample_sequence(model=source, seed=seeds,
                                                 max_context=context, num_tokens=NUM_TOKENS,
