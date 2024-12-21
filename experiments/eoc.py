@@ -502,7 +502,7 @@ def lstm_sample_plot(
         chars[1,0] = (chars[1,0] + 1) % num_tokens
 
         source = up.LSTMGen(emb, mask_channel=False, layers=layers)
-        source.to(torch.float64)
+        # source.to(torch.float64)
 
         temp_sample = 10 ** np.random.uniform(*temperature)
         mult_sample = np.random.uniform(*mult)
