@@ -504,7 +504,11 @@ def lstm_sample_plot(
         source = up.LSTMGen(emb, mask_channel=False, layers=layers)
         # source.to(torch.float64)
 
-        temp_sample = 10 ** np.random.uniform(*temperature)
+        if type(temperature) is tuple:
+            temp_sample = 10 ** np.random.uniform(*temperature)
+        else:
+            temp_sample = temperature
+
         mult_sample = np.random.uniform(*mult)
 
         source.token_embedding.weight.data *= emb_mult
