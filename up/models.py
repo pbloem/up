@@ -7,7 +7,7 @@ from former.util import d
 
 import random, math, tqdm
 
-from .util import Reshape, kl_loss, vae_sample, coords, Lambda
+from .util import Reshape, kl_loss, vae_sample, coords, Lambda, sample
 
 class ReservoirNet(nn.Module):
     """
@@ -288,19 +288,20 @@ class LSTMGen(nn.Module):
         super().__init__()
 
         self.emb = emb
+        self.num_tokens = num_tokens
 
         self.token_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=num_tokens)
         self.lstm = nn.LSTM(emb * 2, emb, num_layers=layers, batch_first=True)
         self.toprobs = nn.Linear(emb, num_tokens + 1) if mask_channel else nn.Linear(emb, num_tokens)
 
-    def forward(self, x, z):
+    def forward(self, x, z, hidden=None):
 
         assert x.size() == z.size(), f'{x.size()} {z.size()}'
 
         x, z = self.token_embedding(x), self.token_embedding(z)
 
         x = torch.cat((x, z), dim=-1)
-        x = self.lstm(x)[0]
+        x, _ = self.lstm(x, hidden)
 
         x = self.toprobs(x)
 
@@ -311,6 +312,114 @@ class LSTMGen(nn.Module):
         self.token_embedding.reset_parameters()
         self.lstm.reset_parameters()
         self.toprobs.reset_parameters()
+
+
+    def lyapunov(self, units=32, burnin=1000, sim=1000, gamma0=1e-12, eps=1e-16):
+        """
+        Estimates the Lyapunov exponent of the system under a uniform random drive
+
+        Uses the method described in Sprott 2003 and Boedecker 2012.
+
+        :param units: Number of units (dimensions of the hidden state) to average the estimate over
+        :param burnin: Number of simulation steps to wait
+        :param sim: Number of simulation steps to estimate over
+        :return:
+        """
+
+        with torch.no_grad():
+            e = self.emb
+            sum_units = 0.0
+
+            # These calculations are best done in high precisions
+            self.to(torch.float64) # Does this work?
+            estimates = []
+
+            for _ in range(units):
+                unit = random.randrange(0, self.emb)
+
+                ## Burn-in
+                #  run the model for `burnin` steps on random input
+                x, z = torch.randint(low=0, high=self.num_tokens, size=(1, burnin), device=d()), \
+                       torch.randint(low=0, high=self.num_tokens, size=(1, burnin), device=d())
+
+                x, z = self.token_embedding(x), self.token_embedding(z)
+
+                x = torch.cat((x, z), dim=-1)
+                x, (h, c) = self.lstm(x)
+
+                # Modify the c parameter
+                c0, cp = c,  c.clone()
+                cp[0, 0, unit] += gamma0
+
+                # Run both versions of the network for `sim` more steps _autoregressively. That is we sample a character
+                # sequence from both models and measure the hamming distance for the resulting sequences.
+
+                chars0 = sample_lstm(model=self, seed=chars,
+                                         max_context=context, num_tokens=num_tokens,
+                                         length=context-chars.size(1), temperature=temp_sample, conditional=conds)
+
+
+            self.lstm.to(torch.float32)  # return to 32 precision
+
+            return sum(estimates) / len(estimates)
+
+    def sample_sequence(self, seed, max_context, num_tokens, length=600, temperature=0.5,
+                        conditional=None, verbose=False, hidden=None):
+        """
+        Sequentially samples a batch of sequences from the model, token by token.
+
+        :param model:
+        :param seed: The sequence to start with.
+        :param length: The total number of characters to sample.
+        :param temperature: The sampling temperature.
+        :param verbose: If true, the sampled sequence is also printed as it is sampled.
+
+        :return: The sampled sequence, including the seed.
+        """
+
+        if seed is not None:
+            (b, seedlen) = seed.size()
+
+            sequence = seed.detach().clone()
+        else:
+            sequence = torch.zeros(size=(0, 0), device=())
+
+        for i in range(length):
+
+            # Input is the tail end of the sampled sequence (as many tokens as the model can handle)
+            input = sequence[:, -max_context:]
+
+            b, l = input.size()
+
+            # Run the current input through the model
+            if conditional is not None:
+                to = seedlen + i
+                fr = max(0, to - max_context)
+                output = self(input, conditional[:, fr:to], hidden=hidden)
+                # -- Note that we only give the model a sliding window view on the conditional. This makes sampling more
+                #    efficient.
+                # -- Careful: the conditional should be as long as length + seedlen
+            else:
+                output = self(input, hidden=hidden)
+            # output = F.log_softmax(output, dim=-1)
+
+            assert output.size() == (b, l, num_tokens)
+
+            # Sample the next token from the probabilitys at the last position of the output.
+            cs = sample(output[:, -1, :], temperature)
+
+            assert cs.size() == (b,)
+
+            # if verbose:
+            #     print(str(chr(max(32, c))), end='', flush=True)
+
+            # print(sequence.size(), cs.size())
+            # exit()
+
+            sequence = torch.cat([sequence, cs[:, None]], dim=-1) # Append the sampled token to the sequence
+
+        return sequence
+
 
 class AE(nn.Module):
 

@@ -415,42 +415,19 @@ def lstm_sample(
 
 def lstm_sample_auto(
         emb=128,
-        layers=1,
-        seedlength=5,
+        layers=(1,2),
+        seedlength=32,
         context=512,
         samples=4,
         batch_size=4,
         temperature=(-1, -4),
-        mult=(0.7, 0.95),
+        mult=(5, 2),
+        emb_mult=1e-8,
         reps=1, # how often to feed the output back into the model
         usemask=False,
     ):
 
     num_tokens = 256
-
-    class Model(nn.Module):
-
-        def __init__(self, emb, mask_channel, layers=1):
-            super().__init__()
-
-            self.emb = emb
-
-            self.token_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=num_tokens)
-            self.lstm = nn.LSTM(emb * 2, emb, num_layers=layers, batch_first=True)
-            self.toprobs = nn.Linear(emb, num_tokens + 1) if mask_channel else nn.Linear(emb, num_tokens)
-
-        def forward(self, x, z):
-
-            assert x.size() == z.size(), f'{x.size()} {z.size()}'
-
-            x, z = self.token_embedding(x), self.token_embedding(z)
-
-            x = torch.cat((x, z), dim=-1)
-            x = self.lstm(x)[0]
-
-            x = self.toprobs(x)
-
-            return x
 
     for _ in range(samples):
         # Initialize the source model
@@ -461,13 +438,21 @@ def lstm_sample_auto(
 
         for _ in range(reps):
             # the seed
-            chars = torch.randint(low=0, high=num_tokens, size=(batch_size, seedlength), device=d())
+            # chars = torch.randint(low=0, high=num_tokens, size=(batch_size, seedlength), device=d())
+            chars = torch.randint(low=0, high=num_tokens, size=(1, seedlength), device=d()).expand(batch_size,
+                                                                                                   seedlength)
+            chars[1, 0] = (chars[1, 0] + 1) % num_tokens
+            chars[2,16] = (chars[2, 16] + 1) % num_tokens
+            chars[3,28] = (chars[3, 28] + 1) % num_tokens
 
-            source = Model(emb, mask_channel=False, layers=layers)
+
+            lsamp = random.randrange(*layers)
+            source = up.LSTMGen(emb, mask_channel=False, layers=lsamp)
+
             temp_sample = 10 ** np.random.uniform(*temperature)
             mult_sample = np.random.uniform(*mult)
 
-            print(f'mult {mult_sample:.4} \t temp {np.log10(temp_sample):.4}')
+            print(f'mult {mult_sample:.4} \t temp {np.log10(temp_sample):.4} \t num layers {lsamp}')
 
             source.token_embedding.weight.data *= 1
             lstm_scale(source.lstm, mult_sample)
@@ -484,6 +469,62 @@ def lstm_sample_auto(
         for seq in chars.tolist():
             print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
         print('---')
+
+
+def lstm_sample_plot(
+        emb=128,
+        layers=1,
+        seedlength=32,
+        context=512,
+        samples=4,
+        temperature=(-1, -4),
+        mult=(0.7, 0.95),
+        emb_mult=1.0,
+        usemask=False,
+    ):
+
+    num_tokens = 256
+    batch_size = 2
+
+    mults = []
+    hammings = []
+
+    for _ in trange(samples):
+        # Initialize the source model
+        # source = up.GTransformer(emb=width, heads=heads, depth=get_depth(width), seq_length=context, num_tokens=num_tokens,
+        #         nl=nl(nonlinearity), mask_channel=True)
+
+        conds = torch.full(fill_value=0, size=(batch_size, context), device=d(), dtype=torch.long)
+
+        # the seed
+        # chars = torch.full(fill_value=0, size=(batch_size, seedlength), device=d())
+        chars = torch.randint(low=0, high=num_tokens, size=(1, seedlength), device=d()).expand(batch_size, seedlength)
+        chars[1,0] = (chars[1,0] + 1) % num_tokens
+
+        source = up.LSTMGen(emb, mask_channel=False, layers=layers)
+
+        temp_sample = 10 ** np.random.uniform(*temperature)
+        mult_sample = np.random.uniform(*mult)
+
+        source.token_embedding.weight.data *= emb_mult
+        lstm_scale(source.lstm, mult_sample)
+
+        if torch.cuda.is_available():
+            source.cuda()
+
+        chars = up.util.sample_sequence(model=source, seed=chars,
+                                        max_context=context, num_tokens=num_tokens,
+                                        length=context-chars.size(1), temperature=temp_sample, conditional=conds)
+        hamming = (chars[0, :] != chars[1, :]).sum().item()
+
+        hammings.append(hamming)
+        mults.append(mult_sample)
+
+    plt.scatter(mults, hammings, alpha=0.5)
+    plt.xlabel('multiplier')
+    plt.ylabel('hamming distance')
+
+    plt.savefig(f'scatter-{emb}-{emb_mult}.png')
 
 def example(
         widthperhead=128,
@@ -700,6 +741,23 @@ def anti(vocab=[0, 1, 2, 3, 4], seed=[4, 1, 3], n=600, lam=1e-8, degree=3):
         #     print('!', end='')
 
     print()
+
+def lstm_eoc(emb=256, num_tokens=256):
+    """
+    Try to find some kind of edge of chaos in the LSTM
+
+    :param emb:
+    :param num_tokens:
+    :return:
+    """
+
+    source = up.LSTMGen(emb=emb, mask_channel=False, num_tokens=num_tokens)
+
+
+
+
+
+
 
 if __name__ == '__main__':
     fire.Fire()
