@@ -476,59 +476,88 @@ def lstm_sample_plot(
         layers=1,
         seedlength=32,
         context=512,
-        samples=4,
-        temperature=(-1, -4),
-        mult=(0.7, 0.95),
+        temperature=0.0,
+        mult_range=(2.5, 3.5),
         emb_mult=1.0,
         usemask=False,
+        fix_source = False, # Use a single random source, scaled to different values
+        mult_res=20, # how many bins horizontally
+        reps = 2, # How many repeats per bin
     ):
 
     num_tokens = 256
     batch_size = 2
 
+    # multipliers, horizontal axis.
     mults = []
-    hammings = []
+    # Hamming distances
+    hammings = np.zeros((reps, mult_res))
+    # Sorted relative frequencies,
+    freqs = np.zeros((num_tokens, mult_res))
 
-    for _ in trange(samples):
-        # Initialize the source model
-        # source = up.GTransformer(emb=width, heads=heads, depth=get_depth(width), seq_length=context, num_tokens=num_tokens,
-        #         nl=nl(nonlinearity), mask_channel=True)
+    source_orig = up.LSTMGen(emb, mask_channel=False, layers=layers) if fix_source else None
 
-        conds = torch.full(fill_value=0, size=(batch_size, context), device=d(), dtype=torch.long)
+    mults = np.linspace(*mult_range, num=mult_res)
+    for i, mult in tqdm(enumerate(mults), total=mults.shape[0]):
+        for r in range(reps):
+            # Initialize the source model
+            # source = up.GTransformer(emb=width, heads=heads, depth=get_depth(width), seq_length=context, num_tokens=num_tokens,
+            #         nl=nl(nonlinearity), mask_channel=True)
 
-        # the seed
-        # chars = torch.full(fill_value=0, size=(batch_size, seedlength), device=d())
-        chars = torch.randint(low=0, high=num_tokens, size=(1, seedlength), device=d()).expand(batch_size, seedlength)
-        chars[1,0] = (chars[1,0] + 1) % num_tokens
+            conds = torch.full(fill_value=0, size=(batch_size, context), device=d(), dtype=torch.long)
 
-        source = up.LSTMGen(emb, mask_channel=False, layers=layers)
-        # source.to(torch.float64)
+            # the seed
+            # chars = torch.full(fill_value=0, size=(batch_size, seedlength), device=d())
+            chars = torch.randint(low=0, high=num_tokens, size=(1, seedlength), device=d()).expand(batch_size, seedlength)
+            chars[1,0] = (chars[1,0] + 1) % num_tokens
 
-        if type(temperature) is tuple:
-            temp_sample = 10 ** np.random.uniform(*temperature)
-        else:
-            temp_sample = temperature
+            source = up.LSTMGen(emb, mask_channel=False, layers=layers)
+            if source_orig is not None:
+                source.load_state_dict(source_orig.state_dict())
+            # source.to(torch.float64)
 
-        mult_sample = np.random.uniform(*mult)
+            source.token_embedding.weight.data *= emb_mult
+            lstm_scale(source.lstm, mult)
 
-        source.token_embedding.weight.data *= emb_mult
-        lstm_scale(source.lstm, mult_sample)
+            if torch.cuda.is_available():
+                source.cuda()
 
-        if torch.cuda.is_available():
-            source.cuda()
+            chars = up.util.sample_sequence(model=source, seed=chars,
+                                            max_context=context, num_tokens=num_tokens,
+                                            length=context-chars.size(1), temperature=temperature, conditional=conds)
+            hamming = (chars[0, :] != chars[1, :]).sum().item()
 
-        chars = up.util.sample_sequence(model=source, seed=chars,
-                                        max_context=context, num_tokens=num_tokens,
-                                        length=context-chars.size(1), temperature=temp_sample, conditional=conds)
-        hamming = (chars[0, :] != chars[1, :]).sum().item()
+            c = Counter(chars[0,:].tolist())
+            fs = [freq for token, freq in c.most_common()]
+            fs = np.asarray(fs)
+            fs = np.concatenate([fs, np.zeros(num_tokens - fs.shape[0])], axis=0)
+            freqs[:, i] += fs
 
-        hammings.append(hamming)
-        mults.append(mult_sample)
+            hammings[r, i] = hamming
 
-    plt.scatter(mults, hammings, alpha=0.5)
-    plt.xlabel('multiplier')
-    plt.ylabel('hamming distance')
 
+    freqs = freqs / reps
+
+    mults = np.asarray(mults)
+    mults_arr = np.tile(mults[None, :], reps=(reps, 1))
+
+    fig, (ax1, ax2) = plt.subplots(nrows=2, ncols=1, sharex=True)
+
+    ax1.scatter(mults_arr.flatten(), hammings.flatten(), alpha=0.5, linewidths=0)
+    ax1.plot(mults, hammings.mean(axis=0))
+    ax1.set_ylabel('hamming distance')
+
+    eps=1e-4
+    print(freqs)
+    print(freqs.min(), freqs.max())
+    print(mult_range)
+    ax2.imshow(np.log(freqs+eps), cmap='bone_r', extent=(mult_range[0], mult_range[1], 0, num_tokens), aspect='auto', interpolation='none', origin='lower')
+    ax2.set_ylabel('ranked frequency')
+    ax2.set_xlabel('multiplier')
+    ax2.set_xlim(*mult_range)
+
+    clean(ax1)
+    clean(ax2)
     plt.savefig(f'scatter-{emb}-{emb_mult}.png')
 
 def example(
