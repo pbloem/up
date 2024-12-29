@@ -499,7 +499,7 @@ def go(
         # -- NB: This is all on the CPU. For some reason GPU LSTMs don't show the right transition
         #    to chaos.
 
-        source = up.LSTMGen(lstmemb, mask_channel=False, num_tokens=NUM_TOKENS)
+        source = up.LSTMGen(lstmemb, mask_channel=False, num_tokens=NUM_TOKENS, layers=lstmlayers)
 
         buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, 1), device="cpu")
         buffer = buffer.tile((1, context))
