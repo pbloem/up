@@ -283,7 +283,8 @@ def go(
                                         # Chosen uniform-random from the given range
          anti_sol_from=0,               # How long to wait (in instances) before starting to generate AS strings
          anti_sol_buffer=False,         # If true, add the AS strings to the buffer. If false, add them to the batch.
-         lstmemb=32,
+         lstmemb=128,
+         lstmlayers=4,
          lstmmult=(1.0,3.5),
          lstmtemp=0.0,
          lstmseed=8,
