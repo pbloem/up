@@ -483,10 +483,13 @@ def lstm_sample_plot(
         fix_source = False, # Use a single random source, scaled to different values
         mult_res=20, # how many bins horizontally
         reps = 2, # How many repeats per bin
+        ylim = None,
     ):
 
     num_tokens = 256
     batch_size = 2
+
+    ylim = num_tokens if ylim is None else ylim
 
     # multipliers, horizontal axis.
     mults = []
@@ -496,6 +499,7 @@ def lstm_sample_plot(
     freqs = np.zeros((num_tokens, mult_res))
 
     source_orig = up.LSTMGen(emb, mask_channel=False, layers=layers) if fix_source else None
+    conds = torch.full(fill_value=0, size=(batch_size, context), device=d(), dtype=torch.long)
 
     mults = np.linspace(*mult_range, num=mult_res)
     for i, mult in tqdm(enumerate(mults), total=mults.shape[0]):
@@ -504,7 +508,7 @@ def lstm_sample_plot(
             # source = up.GTransformer(emb=width, heads=heads, depth=get_depth(width), seq_length=context, num_tokens=num_tokens,
             #         nl=nl(nonlinearity), mask_channel=True)
 
-            conds = torch.full(fill_value=0, size=(batch_size, context), device=d(), dtype=torch.long)
+            # conds = torch.randint(high=num_tokens, size=(batch_size, context), device=d(), dtype=torch.long)
 
             # the seed
             # chars = torch.full(fill_value=0, size=(batch_size, seedlength), device=d())
@@ -527,13 +531,15 @@ def lstm_sample_plot(
                                             length=context-chars.size(1), temperature=temperature, conditional=conds)
             hamming = (chars[0, :] != chars[1, :]).sum().item()
 
-            c = Counter(chars[0,:].tolist())
+            c = Counter(chars[0,seedlength:].tolist())
             fs = [freq for token, freq in c.most_common()]
             fs = np.asarray(fs)
             fs = np.concatenate([fs, np.zeros(num_tokens - fs.shape[0])], axis=0)
             freqs[:, i] += fs
 
             hammings[r, i] = hamming
+
+            conds = chars[0, :].expand(batch_size, context)
 
 
     freqs = freqs / reps
@@ -551,7 +557,9 @@ def lstm_sample_plot(
     print(freqs)
     print(freqs.min(), freqs.max())
     print(mult_range)
-    ax2.imshow(np.log(freqs+eps), cmap='bone_r', extent=(mult_range[0], mult_range[1], 0, num_tokens), aspect='auto', interpolation='none', origin='lower')
+
+    freqs = freqs[:ylim, :]
+    ax2.imshow(np.log(freqs+eps), cmap='gray_r', extent=(mult_range[0], mult_range[1], 0, freqs.shape[0]), aspect='auto', interpolation='none', origin='lower')
     ax2.set_ylabel('ranked frequency')
     ax2.set_xlabel('multiplier')
     ax2.set_xlim(*mult_range)

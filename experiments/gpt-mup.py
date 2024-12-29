@@ -284,10 +284,12 @@ def go(
          anti_sol_from=0,               # How long to wait (in instances) before starting to generate AS strings
          anti_sol_buffer=False,         # If true, add the AS strings to the buffer. If false, add them to the batch.
          lstmemb=32,
-         lstmmult=(0.1,0.9),
-         lstmtemp=(-1.5,-4.5),
+         lstmmult=(1.0,3.5),
+         lstmtemp=0.0,
          lstmseed=8,
-         lstmreset=(50,50)              # How many instances of the buffer to reset to constant and random sequences resp.
+         lstmreset=(50,50),             # How many instances of the buffer to reset to constant and random sequences resp.
+         lstmembmult=1e-8               # multiplier for the token embedding weights. Setting this very low results in a
+                                        # good, predictable transition to chaos.
 ):
 
     """
@@ -493,11 +495,12 @@ def go(
         We use a buffer to minimize dependence in the samples, just as with the transformer generator.   
         """
 
-        source = up.LSTMGen(lstmemb, mask_channel=False, num_tokens=NUM_TOKENS)
-        if torch.cuda.is_available():
-            source.cuda()  # This might not actually be faster, given how small the LSTM is...
+        # -- NB: This is all on the CPU. For some reason GPU LSTMs don't show the right transition
+        #    to chaos.
 
-        buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, 1), device=d())
+        source = up.LSTMGen(lstmemb, mask_channel=False, num_tokens=NUM_TOKENS)
+
+        buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, 1), device="cpu")
         buffer = buffer.tile((1, context))
         #-- We init the buffer with constant sequences (i.e. those filled with a single repeating token). This ensures
         #   that the LSTM is conditioned on a simple sequence and starts by generating highly regular sequences.
@@ -513,9 +516,9 @@ def go(
                 # replace some random rows in the buffer with constant and random sequences
                 con, ran = lstmreset
 
-                crows = torch.randint(low=0, high=NUM_TOKENS, size=(con, 1), device=d())
+                crows = torch.randint(low=0, high=NUM_TOKENS, size=(con, 1), device="cpu")
                 crows = crows.tile((1, context))
-                rrows = torch.randint(low=0, high=NUM_TOKENS, size=(ran, context), device=d())
+                rrows = torch.randint(low=0, high=NUM_TOKENS, size=(ran, context), device="cpu")
 
                 rows = torch.cat((crows, rrows), dim=0)
                 idx = random.sample(range(buffer_size), rows.size(0))
@@ -525,13 +528,12 @@ def go(
                 # Re-initialize the source
                 source.reset_parameters()
 
-                temp_sample = 10 ** np.random.uniform(*lstmtemp)
                 mult_sample = np.random.uniform(*lstmmult)
 
                 # print(f'mult {mult_sample:.4} \t temp {np.log10(temp_sample):.4}')
 
-                source.token_embedding.weight.data *= 1
                 lstm_scale(source.lstm, mult_sample)
+                source.token_embedding.weight.data *= lstmembmult
 
                 # slice a random selection of rows from the buffer (without replacement)
                 iseeds = random.sample(range(buffer.size(0)), source_microbatch_size)
@@ -542,7 +544,7 @@ def go(
 
                 chars = up.util.sample_sequence(model=source, seed=seeds,
                                                 max_context=context, num_tokens=NUM_TOKENS,
-                                                length=context - seeds.size(1), temperature=temp_sample,
+                                                length=context - seeds.size(1), temperature=lstmtemp,
                                                 conditional=conds)
 
                 buffer[iconds, :] = chars
