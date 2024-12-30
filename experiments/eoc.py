@@ -586,7 +586,7 @@ def lstm_sample_plot(
 
 def lstm_sample_buffer(
         emb=128,
-        buffer_size=200,
+        buffer_size=400,
         target_batch_size=4,
         source_batch_size=20,
         burn_in=300, # Samples to take before starting

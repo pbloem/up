@@ -415,12 +415,9 @@ def go(
 
         buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, context), device=d())
 
-        sampletime = -1.0
-
         def generator_trf(bs):
 
             # Sample noise from a random model and insert into the buffer
-            tic()
             with torch.no_grad():
                 # Re-initialize the source
                 if old_init:
@@ -506,12 +503,9 @@ def go(
         #-- We init the buffer with constant sequences (i.e. those filled with a single repeating token). This ensures
         #   that the LSTM is conditioned on a simple sequence and starts by generating highly regular sequences.
 
-        sampletime = -1.0
-
         def generator_lstm(bs):
 
             # Sample noise from a random model and insert into the buffer
-            tic()
             with torch.no_grad():
 
                 # replace some random rows in the buffer with constant and random sequences
@@ -576,7 +570,6 @@ def go(
         def generator_echo(bs):
 
             # Sample noise from a random model and insert into the buffer
-            tic()
             with torch.no_grad():
                 cmp_source = up.ReservoirNet(emb=echo_emb, conn=echo_conn, num_tokens=NUM_TOKENS,
                                              max_out=echo_max_out, init_var=echo_var, nl=torch.tanh, layers=echo_layers)
@@ -739,15 +732,18 @@ def go(
                 json.dump(results, f, indent=6, default=lambda o: '<not serializable>') # the json is dumped and overwritten every eval
 
         ### Train
-        sampletime = toc()
 
         tic()
 
         bs = min(int(round(mbraw)), target_microbatch_size)
         # If the current macrobatch size is smaller than the microbatch size, we go with the smaller value
-        # (i.e. we leave memory empty).
+        # (i.e. we leave memory unused).
 
-        batch = generator(bs) # Sample a training batch (if there is a )
+        batch = generator(bs) # Sample a training batch
+
+        sampletime = toc()
+
+        tic()
 
         if not anti_sol_buffer and anti_sol_num > 0 and instances_seen > anti_sol_from:
             # Generate some anti-Solomonoff instances.
