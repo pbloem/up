@@ -540,7 +540,8 @@ def go(
                 iseeds = random.sample(range(buffer.size(0)), source_microbatch_size)
                 iconds = random.sample(range(buffer.size(0)), source_microbatch_size)
 
-                seeds = buffer[iseeds, :lstmseed]
+                s = random.randrange(0, context - lstmseed)
+                seeds = buffer[iseeds, s:s+lstmseed]
                 conds = buffer[iconds, :]
 
                 chars = up.util.sample_sequence(model=source, seed=seeds,
