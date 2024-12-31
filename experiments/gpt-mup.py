@@ -542,7 +542,7 @@ def go(
 
                 t0sample = time.time()
 
-                chars = up.util.sample_sequence(model=source, seed=seeds,
+                chars = source.sample_sequence(seed=seeds,
                                                 max_context=context, num_tokens=NUM_TOKENS,
                                                 length=context - seeds.size(1), temperature=lstmtemp,
                                                 conditional=conds)

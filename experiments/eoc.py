@@ -647,7 +647,12 @@ def lstm_sample_buffer(
             seeds = buffer[iseeds, s:s+seedlength]
             conds = buffer[iconds, :]
 
-            chars = up.util.sample_sequence(model=source, seed=seeds,
+            # chars = up.util.sample_sequence(model=source, seed=seeds,
+            #                                 max_context=context, num_tokens=num_tokens,
+            #                                 length=context - seeds.size(1), temperature=temperature,
+            #                                 conditional=conds)
+
+            chars = source.sample_sequence(seed=seeds,
                                             max_context=context, num_tokens=num_tokens,
                                             length=context - seeds.size(1), temperature=temperature,
                                             conditional=conds)
@@ -704,9 +709,14 @@ def lstm_sample_buffer(
 
             lstm_scale(source.lstm, mult)
 
-            chars = up.util.sample_sequence(model=source, seed=seed,
+            # chars = up.util.sample_sequence(model=source, seed=seed,
+            #                                 max_context=context, num_tokens=num_tokens,
+            #                                 length=context - seed.size(1), temperature=temperature, conditional=cond)
+
+            chars = source.sample_sequence(seed=seed,
                                             max_context=context, num_tokens=num_tokens,
                                             length=context - seed.size(1), temperature=temperature, conditional=cond)
+
 
             hamming = (chars[0, seedlength:] != chars[1, seedlength:]).sum().item()
             hammings[r, i] = hamming
