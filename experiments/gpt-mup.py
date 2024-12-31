@@ -508,8 +508,6 @@ def go(
             # Sample noise from a random model and insert into the buffer
             with torch.no_grad():
 
-                t0 = time.time()
-
                 # replace some random rows in the buffer with constant and random sequences
                 con, ran = lstmreset
 
@@ -540,15 +538,10 @@ def go(
                 seeds = buffer[iseeds, s:s+lstmseed]
                 conds = buffer[iconds, :]
 
-                t0sample = time.time()
-
                 chars = source.sample_sequence(seed=seeds,
                                                 max_context=context, num_tokens=NUM_TOKENS,
                                                 length=context - seeds.size(1), temperature=lstmtemp,
                                                 conditional=conds)
-
-                print('-- sample: time taken', time.time() - t0sample)
-
 
                 buffer[iconds, :] = chars
 
@@ -557,8 +550,6 @@ def go(
                 batch = buffer[ibatch, :]
                 # -- Using different indices for the source model and the batch makes the sample more like an iid. sample
                 #    (or at least less obviously dependent).
-
-                print('time taken', time.time() - t0)
 
                 return batch
 
