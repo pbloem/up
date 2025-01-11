@@ -71,7 +71,7 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2,
                 super().__init__()
                 self.p = nn.Parameter(torch.randn(size=(total*2,)))
 
-            def forward(self):
+            def forward(self, x): # ignore x
                 return self.p
         hyper = FH()
     else: # real hypernetwork that samples them from a genertor
