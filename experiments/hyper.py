@@ -189,10 +189,10 @@ def slice(raw, sizes):
 
 
 def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
-       latent=256, kl_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False, stdmult=1e-8):
+       latent=256, kl_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False, stdmult=1e-8, nohyper=False):
 
     model = LSTMGen(emb, mask_channel=False, layers=1, num_tokens=num_tokens, fake_hyper=fake_hyper, latent=latent,
-                       skip_sample=skip_sample, stdmult=stdmult)
+                       skip_sample=skip_sample, stdmult=stdmult, nohyper=nohyper)
 
     if torch.cuda.is_available():
         model.cuda()
