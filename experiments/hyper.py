@@ -74,6 +74,7 @@ class LSTMGen(nn.Module):
         x = self.token_embedding(x)
         if self.nohyper:
             x, hidden = self.lstm(x, hidden)
+            kl_loss = torch.tensor([0.0], device=d())
         else:
             if z is None:
                 z = torch.randn(size=(1, self.latent,), device=d())
