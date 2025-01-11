@@ -77,7 +77,9 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2,
     else: # real hypernetwork that samples them from a genertor
         hyper = nn.Sequential(
             nn.Linear(latent, total), nn.ReLU(),
+            nn.LayerNorm(total),
             nn.Linear(total, total), nn.ReLU(),
+            nn.LayerNorm(total),
             nn.Linear(total, total*2)
         )
 
