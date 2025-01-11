@@ -45,7 +45,8 @@ def slice(raw, sizes):
     return res
 
 
-def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2, latent=256, kl_alpha=1.0):
+def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2,
+       latent=256, kl_alpha=1.0, acc=3):
 
     model = up.LSTMGen(emb, mask_channel=False, layers=1, num_tokens=num_tokens)
 
@@ -71,8 +72,6 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2, 
 
     for i in (bar := trange(batches)):
 
-        opt.zero_grad()
-
         batch = torch.randint(high=num_tokens, size=(bs, rep), device=d())
         batch = batch.tile((1, context//rep))
 
@@ -97,7 +96,10 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2, 
         bar.set_postfix({'l': loss.item(), 'kl' : kl_loss.item()})
 
         rloss.backward()
-        opt.step()
+
+        if i % acc == 0:
+            opt.step()
+            opt.zero_grad()
 
         # print(parms.keys())
         # exit()
