@@ -54,7 +54,7 @@ def slice(raw, sizes):
 
 
 def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2,
-       latent=256, kl_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False):
+       latent=256, kl_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False, lvsub=0.0):
 
     model = up.LSTMGen(emb, mask_channel=False, layers=1, num_tokens=num_tokens)
 
@@ -101,7 +101,7 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2,
         rawparm = hyper(latentin).squeeze(0)
 
         # reparamertized sample
-        mean, logvar = rawparm[:total], rawparm[total:]
+        mean, logvar = rawparm[:total], rawparm[total:] - lvsub
         if skip_sample:
             sample = mean
         else:
