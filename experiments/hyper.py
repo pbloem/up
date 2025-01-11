@@ -69,25 +69,27 @@ class LSTMGen(nn.Module):
         :param return_hidden:
         :return:
         """
-        if z is None:
-            z = torch.randn(size=(1, self.latent,), device=d())
 
-        rawparm = self.hyper(z).squeeze(0) # hy
-
-        # reparamertized sample
-        mean, logvar = rawparm[:self.total], rawparm[self.total:] + 2 * math.log(self.stdmult)
-        kl_loss = kl(mean, logvar)
-
-        if self.skip_sample:
-            sample = mean
-        else:
-            eps = torch.randn_like(mean)
-            sample = mean + (0.5 * logvar).exp() * eps
 
         x = self.token_embedding(x)
         if self.nohyper:
             x, hidden = self.lstm(x, hidden)
         else:
+            if z is None:
+                z = torch.randn(size=(1, self.latent,), device=d())
+
+            rawparm = self.hyper(z).squeeze(0)  # hy
+
+            # reparamertized sample
+            mean, logvar = rawparm[:self.total], rawparm[self.total:] + 2 * math.log(self.stdmult)
+            kl_loss = kl(mean, logvar)
+
+            if self.skip_sample:
+                sample = mean
+            else:
+                eps = torch.randn_like(mean)
+                sample = mean + (0.5 * logvar).exp() * eps
+
             x, hidden = torch.func.functional_call(self.lstm, slice(sample, self.sizes), x, strict=True)
 
         x = self.toprobs(x)
