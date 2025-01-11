@@ -92,7 +92,7 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2, 
 
         loss = F.cross_entropy(output.permute(0, 2, 1), target, reduction='mean')
         kl_loss = kl(mean, logvar)
-        rloss = loss + kl_loss
+        rloss = loss + kl_alpha * kl_loss
 
         bar.set_postfix({'l': loss.item(), 'kl' : kl_loss.item()})
 
