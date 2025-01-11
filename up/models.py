@@ -295,7 +295,17 @@ class LSTMGen(nn.Module):
         self.lstm = nn.LSTM(emb * 2, emb, num_layers=layers, batch_first=True)
         self.toprobs = nn.Linear(emb, num_tokens + 1) if mask_channel else nn.Linear(emb, num_tokens)
 
-    def forward(self, x, z, hidden=None, return_hidden=False):
+    def forward(self, x, z=None, hidden=None, return_hidden=False):
+        """
+
+        :param x:
+        :param z: If None, a sequence of zeros is used.
+        :param hidden:
+        :param return_hidden:
+        :return:
+        """
+
+        z = torch.zeros_like(x) if z is None else z
 
         assert x.size() == z.size(), f'{x.size()} {z.size()}'
 
@@ -344,8 +354,8 @@ class LSTMGen(nn.Module):
         for i in rng(length):
 
             # Input is the tail end of the sampled sequence (as many tokens as the model can handle)
-            # input = sequence[:, -max_context:]
-            input = sequence
+            input = sequence[:, -max_context:]
+            # input = sequence
 
             b, l = input.size()
 
