@@ -48,7 +48,8 @@ class LSTMGen(nn.Module):
             class FH(nn.Module):
                 def __init__(self, total):
                     super().__init__()
-                    self.p = nn.Parameter(torch.randn(size=(total * 2,)))
+                    self.p = nn.Parameter(torch.empty(size=(total * 2,)))
+                    torch.nn.init.uniform_(self.p, -math.sqrt(emb), math.sqrt(emb))
 
                 def forward(self, x):  # ignore x
                     return self.p
