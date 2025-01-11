@@ -92,6 +92,9 @@ class LSTMGen(nn.Module):
                 eps = torch.randn_like(mean)
                 sample = mean + (0.5 * logvar).exp() * eps
 
+            print(sample.mean(), sample.var())
+            exit()
+
             x, hidden = torch.func.functional_call(self.lstm, slice(sample, self.sizes), x, strict=True)
 
         x = self.toprobs(x)
