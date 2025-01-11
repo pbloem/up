@@ -31,7 +31,7 @@ class LSTMGen(nn.Module):
         self.skip_sample = skip_sample
 
         self.token_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=num_tokens)
-        self.lstm = nn.LSTM(emb * 2, emb, num_layers=layers, batch_first=True)
+        self.lstm = nn.LSTM(emb, emb, num_layers=layers, batch_first=True)
         self.toprobs = nn.Linear(emb, num_tokens + 1) if mask_channel else nn.Linear(emb, num_tokens)
 
         self.sizes, self.total = {}, 0
