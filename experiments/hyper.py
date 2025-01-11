@@ -49,7 +49,7 @@ class LSTMGen(nn.Module):
                 def __init__(self, total):
                     super().__init__()
                     self.p = nn.Parameter(torch.empty(size=(total * 2,)))
-                    torch.nn.init.uniform_(self.p, -math.sqrt(emb), math.sqrt(emb))
+                    torch.nn.init.uniform_(self.p, -math.sqrt(1/emb), math.sqrt(1/emb))
 
                 def forward(self, x):  # ignore x
                     return self.p
