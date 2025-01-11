@@ -7,7 +7,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 
-import tqdm
+import tqdm, math
 from tqdm import trange
 
 """
@@ -101,12 +101,12 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2,
         rawparm = hyper(latentin).squeeze(0)
 
         # reparamertized sample
-        mean, logvar = rawparm[:total], rawparm[total:]
+        mean, logvar = rawparm[:total], rawparm[total:] + 2 * math.log(stdmult)
         if skip_sample:
             sample = mean
         else:
             eps = torch.randn((total,), device=d())
-            sample = mean + (0.5 * logvar).exp() * eps * stdmult
+            sample = mean + (0.5 * logvar).exp() * eps
 
         output = torch.func.functional_call(model, slice(sample, sizes), input, strict=True)
 
