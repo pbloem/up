@@ -14,6 +14,14 @@ from tqdm import trange
 A test for a kind of hyperparametrization of the source model
 """
 
+class Lambda(nn.Module):
+    def __init__(self, lambd):
+        super().__init__()
+        self.lambd = lambd
+
+    def forward(self, x):
+        return self.lambd(x)
+
 def prod(iterable):
     r = 1
     for elm in iterable:
@@ -46,7 +54,7 @@ def slice(raw, sizes):
 
 
 def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2,
-       latent=256, kl_alpha=1.0, acc=3):
+       latent=256, kl_alpha=1.0, acc=3, fake_hyper=False):
 
     model = up.LSTMGen(emb, mask_channel=False, layers=1, num_tokens=num_tokens)
 
@@ -57,11 +65,19 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2,
     print('total parms in main net', total)
 
     # rawparms = nn.Parameter(torch.randn(size=(total,)))
-    hyper = nn.Sequential(
-        nn.Linear(latent, total), nn.ReLU(),
-        nn.Linear(total, total), nn.ReLU(),
-        nn.Linear(total, total*2)
-    )
+    if fake_hyper: # fake hyper network that just returns the parameters
+        class FH(nn.Module):
+            def __init__(self):
+                self.p = nn.Parameter(torch.randn(size=(total*2,)))
+
+            def forward(self):
+                return self.p
+    else: # real hypernetwork that samples them from a genertor
+        hyper = nn.Sequential(
+            nn.Linear(latent, total), nn.ReLU(),
+            nn.Linear(total, total), nn.ReLU(),
+            nn.Linear(total, total*2)
+        )
 
     if torch.cuda.is_available():
         hyper.cuda()
