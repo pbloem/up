@@ -68,6 +68,7 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2,
     if fake_hyper: # fake hyper network that just returns the parameters
         class FH(nn.Module):
             def __init__(self):
+                super().__init__()
                 self.p = nn.Parameter(torch.randn(size=(total*2,)))
 
             def forward(self):
