@@ -45,14 +45,14 @@ class LSTMGen(nn.Module):
 
         if fake_hyper:  # fake hypernetwork that just returns the parameters
             class FH(nn.Module):
-                def __init__(self):
+                def __init__(self, total):
                     super().__init__()
-                    self.p = nn.Parameter(torch.randn(size=(self.total * 2,)))
+                    self.p = nn.Parameter(torch.randn(size=(total * 2,)))
 
                 def forward(self, x):  # ignore x
                     return self.p
 
-            self.hyper = FH()
+            self.hyper = FH(self.total)
         else:  # real hypernetwork that samples them from a generator
             self.hyper = nn.Sequential(
                 nn.Linear(latent, self.total), nn.ReLU(),
