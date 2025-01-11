@@ -21,13 +21,13 @@ class LSTMGen(nn.Module):
     """
 
     def __init__(self, emb, mask_channel, layers=1, num_tokens=256, fake_hyper=False, latent=256,
-                 stdmult=1e-8, skip_sample=False, nohyper=False):
+                 stdmult=1e-8, meanmult=1.0, skip_sample=False, nohyper=False):
         super().__init__()
 
         self.emb = emb
         self.num_tokens = num_tokens
         self.latent = latent
-        self.stdmult= stdmult
+        self.stdmult, self.meanmult = stdmult, meanmult
         self.skip_sample = skip_sample
         self.nohyper = nohyper
 
@@ -83,7 +83,7 @@ class LSTMGen(nn.Module):
             rawparm = self.hyper(z).squeeze(0)  # hy
 
             # reparamertized sample
-            mean, logvar = rawparm[:self.total], rawparm[self.total:] + 2 * math.log(self.stdmult)
+            mean, logvar = rawparm[:self.total] * self.meanmult, rawparm[self.total:] + 2 * math.log(self.stdmult)
             kl_loss = kl(mean, logvar)
 
             if self.skip_sample:
@@ -91,9 +91,6 @@ class LSTMGen(nn.Module):
             else:
                 eps = torch.randn_like(mean)
                 sample = mean + (0.5 * logvar).exp() * eps
-
-            print(sample.mean(), sample.var())
-            exit()
 
             x, hidden = torch.func.functional_call(self.lstm, slice(sample, self.sizes), x, strict=True)
 
@@ -196,10 +193,10 @@ def slice(raw, sizes):
 
 
 def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
-       latent=256, kl_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False, stdmult=1e-8, nohyper=False):
+       latent=256, kl_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False, stdmult=1e-8, nohyper=False, meanmult=1.0):
 
     model = LSTMGen(emb, mask_channel=False, layers=1, num_tokens=num_tokens, fake_hyper=fake_hyper, latent=latent,
-                       skip_sample=skip_sample, stdmult=stdmult, nohyper=nohyper)
+                       skip_sample=skip_sample, meanmult=meanmult, stdmult=stdmult, nohyper=nohyper)
 
     if torch.cuda.is_available():
         model.cuda()
