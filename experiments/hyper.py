@@ -21,7 +21,7 @@ class LSTMGen(nn.Module):
     """
 
     def __init__(self, emb, mask_channel, layers=1, num_tokens=256, fake_hyper=False, latent=256,
-                 stdmult=1e-8, skip_sample=False):
+                 stdmult=1e-8, skip_sample=False, nohyper=False):
         super().__init__()
 
         self.emb = emb
@@ -29,6 +29,7 @@ class LSTMGen(nn.Module):
         self.latent = latent
         self.stdmult= stdmult
         self.skip_sample = skip_sample
+        self.nohyper = nohyper
 
         self.token_embedding = nn.Embedding(embedding_dim=emb, num_embeddings=num_tokens)
         self.lstm = nn.LSTM(emb, emb, num_layers=layers, batch_first=True)
@@ -84,8 +85,10 @@ class LSTMGen(nn.Module):
             sample = mean + (0.5 * logvar).exp() * eps
 
         x = self.token_embedding(x)
-        # x, hidden = self.lstm(x, hidden)
-        x, hidden = torch.func.functional_call(self.lstm, slice(sample, self.sizes), x, strict=True)
+        if self.nohyper:
+            x, hidden = self.lstm(x, hidden)
+        else:
+            x, hidden = torch.func.functional_call(self.lstm, slice(sample, self.sizes), x, strict=True)
 
         x = self.toprobs(x)
 
