@@ -54,7 +54,7 @@ def slice(raw, sizes):
 
 
 def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2,
-       latent=256, kl_alpha=1.0, acc=3, fake_hyper=False):
+       latent=256, kl_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False):
 
     model = up.LSTMGen(emb, mask_channel=False, layers=1, num_tokens=num_tokens)
 
@@ -102,8 +102,11 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2,
 
         # reparamertized sample
         mean, logvar = rawparm[:total], rawparm[total:]
-        eps = torch.randn((total,), device=d())
-        sample = mean + (0.5 * logvar).exp() * eps
+        if skip_sample:
+            sample = mean
+        else:
+            eps = torch.randn((total,), device=d())
+            sample = mean + (0.5 * logvar).exp() * eps
 
         output = torch.func.functional_call(model, slice(sample, sizes), input, strict=True)
 
