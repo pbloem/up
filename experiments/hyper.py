@@ -96,7 +96,7 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=1e-2, 
 
         bar.set_postfix({'l': loss.item(), 'kl' : kl_loss.item()})
 
-        loss.backward()
+        rloss.backward()
         opt.step()
 
         # print(parms.keys())
