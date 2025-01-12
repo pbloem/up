@@ -124,7 +124,7 @@ class LSTMGen(nn.Module):
         self.lstm.reset_parameters()
         self.toprobs.reset_parameters()
 
-    def detsig(self, n=100):
+    def detsig(self, n=50):
         """
         Computes the dweterminant of the covariance matrix for n samples from the hypernetwork. This is a reasonable
         indication for how spread out the samples are.
@@ -132,15 +132,17 @@ class LSTMGen(nn.Module):
         :param n:
         :return:
         """
+        t = self.total
 
         with torch.no_grad():
             z = torch.randn(size=(n, self.latent), device=d())
             x = self.hyper(z)
 
-            tcov = (x @ x.transpose(0, 1))
-            # -- NB: The covariane matrix (X^TX) is huuge, but the determinant of XX^T is the same and much smaller, so we compute that.
+            tcov = x @ x.transpose(0, 1)
+            # -- NB: The covariance matrix (X^TX) is huge, but the determinant of XX^T is the same and much smaller, so we compute that.
+            # The normalization constant (1/n^dim) is too big so we omit it. We are just looking for relative changes anyway
 
-            return (1/(n**self.total)) * torch.linalg.det(tcov)
+            return torch.linalg.det(tcov)
 
     def sample_sequence(self, seed, max_context, num_tokens, length=600, temperature=0.5, conditional=None, verbose=False):
         """
