@@ -124,6 +124,24 @@ class LSTMGen(nn.Module):
         self.lstm.reset_parameters()
         self.toprobs.reset_parameters()
 
+    def detsig(self, n=100):
+        """
+        Computes the dweterminant of the covariance matrix for n samples from the hypernetwork. This is a reasonable
+        indication for how spread out the samples are.
+
+        :param n:
+        :return:
+        """
+
+        with torch.no_grad():
+            z = torch.randn(size=(n, self.latent), device=d())
+            x = self.hyper(z)
+
+            tcov = (x @ x.transpose(0, 1))
+            # -- NB: The covariane matrix (X^TX) is huuge, but the determinant of XX^T is the same and much smaller, so we compute that.
+
+            return (1/(n**self.total)) * torch.linalg.det(tcov)
+
     def sample_sequence(self, seed, max_context, num_tokens, length=600, temperature=0.5, conditional=None, verbose=False):
         """
         Sequentially samples a batch of sequences from the model, token by token. Since the model is an RNN, we can do
@@ -272,6 +290,8 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
             opt.step()
             opt.zero_grad()
 
+            ds = model.detsig()
+
             ### Admin
             wandb.log({
                 'loss': loss.item(),
@@ -279,7 +299,8 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
                 'gradient norm': gn,
                 'lr': opt.param_groups[0]['lr'],
                 'b reg': bloss,
-                'div': div_loss
+                'div': div_loss,
+                'detsig': ds,
             }, step=instances_seen, commit=True)
 
         instances_seen += bs
