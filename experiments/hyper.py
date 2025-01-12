@@ -67,6 +67,8 @@ class LSTMGen(nn.Module):
                 nn.Linear(self.total*2, self.total * 2)
             )
 
+        self.lastmean, self.lastlv = None, None
+
     def forward(self, x, hidden=None, return_hidden=False, z=None):
         """
 
@@ -80,6 +82,7 @@ class LSTMGen(nn.Module):
         if self.nohyper:
             x, hidden = self.lstm(x, hidden)
             kl_loss = torch.tensor([0.0], device=d())
+            div_loss = torch.tensor([0.0], device=d())
         else:
             if z is None:
                 z = torch.randn(size=(1, self.latent,), device=d())
@@ -101,11 +104,19 @@ class LSTMGen(nn.Module):
 
             x, hidden = torch.func.functional_call(self.lstm, slice(sample + self.base, self.sizes), x, strict=True)
 
+            if self.lastmean is None:
+                div_loss = torch.tensor([0.0], device=d())
+            else:
+                divloss = ((self.lastmean - mean) ** 2).sum()
+                # todo: replace by proper KL div
+
+            self.lastmean, self.lastlv = mean.detach(), logvar.detach()
+
         x = self.toprobs(x)
 
         if return_hidden:
-            return x, hidden, kl_loss
-        return x, kl_loss
+            return x, hidden, kl_loss, div_loss
+        return x, kl_loss, div_loss
 
     def reset_parameters(self):
 
@@ -201,7 +212,7 @@ def slice(raw, sizes):
 
 def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
        latent=256, kl_alpha=1.0, b_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False, stdmult=1e-8, nohyper=False, meanmult=1.0,
-       warmup=5_000, cooldown=-1, gc=1.0, name='hyper-test', project='hyper-test', debug=False):
+       warmup=5_000, cooldown=-1, gc=1.0, name='hyper-test', project='hyper-test', debug=False, div_alpha=1.0):
 
     wd = wandb.init(
         name=name,
@@ -242,12 +253,12 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
         # -- Each instance is a repeating sequence of `rep` randomly chosen characters.
 
         input, target = batch[:, :-1], batch[:, 1:]
-        output, kl_loss = model(input)
+        output, kl_loss, div_loss = model(input)
 
         loss = F.cross_entropy(output.permute(0, 2, 1), target, reduction='mean')
         bloss = 0.0 if fake_hyper else model.base.norm(p=2) # pull the base params to the origin
 
-        rloss = loss + kl_alpha * kl_loss + b_alpha * bloss
+        rloss = loss + kl_alpha * kl_loss + b_alpha * bloss + div_alpha * div_loss
 
         bar.set_postfix({'l': loss.item(), 'kl' : kl_loss.item()})
 
@@ -268,6 +279,7 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
                 'gradient norm': gn,
                 'lr': opt.param_groups[0]['lr'],
                 'b reg': bloss,
+                'div': div_loss
             }, step=instances_seen, commit=True)
 
         instances_seen += bs
