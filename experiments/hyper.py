@@ -258,7 +258,7 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
         loss = F.cross_entropy(output.permute(0, 2, 1), target, reduction='mean')
         bloss = 0.0 if fake_hyper else model.base.norm(p=2) # pull the base params to the origin
 
-        rloss = loss + kl_alpha * kl_loss + b_alpha * bloss + div_alpha * div_loss
+        rloss = loss + kl_alpha * kl_loss + b_alpha * bloss - div_alpha * div_loss
 
         bar.set_postfix({'l': loss.item(), 'kl' : kl_loss.item()})
 
