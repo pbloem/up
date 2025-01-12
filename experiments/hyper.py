@@ -76,7 +76,6 @@ class LSTMGen(nn.Module):
         :return:
         """
 
-
         x = self.token_embedding(x)
         if self.nohyper:
             x, hidden = self.lstm(x, hidden)
