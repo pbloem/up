@@ -57,8 +57,8 @@ class LSTMGen(nn.Module):
             self.hyper = FH(self.total)
         else:  # real hypernetwork that samples them from a generator
             # base parameters
-            # self.base = nn.Parameter(torch.empty(size=(self.total,)))
-            # torch.nn.init.uniform_(self.base, -math.sqrt(1 / emb), math.sqrt(1 / emb))
+            self.base = nn.Parameter(torch.empty(size=(self.total,)))
+            torch.nn.init.uniform_(self.base, -math.sqrt(1 / emb), math.sqrt(1 / emb))
 
             # hypernet generates residual on top of the base.
             self.hyper = nn.Sequential(
@@ -100,7 +100,7 @@ class LSTMGen(nn.Module):
                 eps = torch.randn_like(mean)
                 sample = mean + (0.5 * logvar).exp() * eps
 
-            x, hidden = torch.func.functional_call(self.lstm, slice(sample , self.sizes), x, strict=True)
+            x, hidden = torch.func.functional_call(self.lstm, slice(sample + self.base, self.sizes), x, strict=True)
 
         x = self.toprobs(x)
 
