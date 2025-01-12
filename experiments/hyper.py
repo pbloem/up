@@ -107,7 +107,7 @@ class LSTMGen(nn.Module):
             if self.lastmean is None:
                 div_loss = torch.tensor([0.0], device=d())
             else:
-                divloss = ((self.lastmean - mean) ** 2).sum()
+                div_loss = ((self.lastmean - mean) ** 2).sum()
                 # todo: replace by proper KL div
 
             self.lastmean, self.lastlv = mean.detach(), logvar.detach()
