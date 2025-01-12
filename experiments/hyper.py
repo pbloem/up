@@ -200,8 +200,8 @@ def slice(raw, sizes):
 
 
 def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
-       latent=256, kl_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False, stdmult=1e-8, nohyper=False, meanmult=1.0,
-       warmup=5_000, cooldown=5_000, gc=1.0, name='hyper-test', project='hyper-test', debug=False):
+       latent=256, kl_alpha=1.0, b_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False, stdmult=1e-8, nohyper=False, meanmult=1.0,
+       warmup=5_000, cooldown=-1, gc=1.0, name='hyper-test', project='hyper-test', debug=False):
 
     wd = wandb.init(
         name=name,
@@ -245,7 +245,9 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
         output, kl_loss = model(input)
 
         loss = F.cross_entropy(output.permute(0, 2, 1), target, reduction='mean')
-        rloss = loss + kl_alpha * kl_loss
+        bloss = 0.0 if fake_hyper else model.base.norm(p=2) # pull the base params to the origin
+
+        rloss = loss + kl_alpha * kl_loss + b_alpha * bloss
 
         bar.set_postfix({'l': loss.item(), 'kl' : kl_loss.item()})
 
@@ -264,7 +266,8 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
                 'loss': loss.item(),
                 'kl': kl_loss.item(),
                 'gradient norm': gn,
-                'lr': opt.param_groups[0]['lr']
+                'lr': opt.param_groups[0]['lr'],
+                'b reg': bloss,
             }, step=instances_seen, commit=True)
 
         instances_seen += bs
