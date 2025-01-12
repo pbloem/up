@@ -1,7 +1,7 @@
 import fire
 
-import up
-from up.util import d
+import up, wandb
+from up.util import tic, toc, coords, d, sample, sample_sequence, gradient_norm, remap
 
 import torch
 from torch import nn
@@ -85,6 +85,9 @@ class LSTMGen(nn.Module):
             # reparamertized sample
             mean, logvar = rawparm[:self.total] * self.meanmult, rawparm[self.total:] + 2 * math.log(self.stdmult)
             kl_loss = kl(mean, logvar)
+
+            # print(mean.var().item())
+            # exit()
 
             if self.skip_sample:
                 sample = mean
@@ -193,7 +196,15 @@ def slice(raw, sizes):
 
 
 def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
-       latent=256, kl_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False, stdmult=1e-8, nohyper=False, meanmult=1.0):
+       latent=256, kl_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False, stdmult=1e-8, nohyper=False, meanmult=1.0,
+       warmup=5_000, cooldown=5_000, gc=1.0, name='hyper-test', project='hyper-test', debug=False):
+
+    wd = wandb.init(
+        name=name,
+        project=project,
+        config=locals(),
+        mode= 'disabled' if debug else 'online'
+    )
 
     model = LSTMGen(emb, mask_channel=False, layers=1, num_tokens=num_tokens, fake_hyper=fake_hyper, latent=latent,
                        skip_sample=skip_sample, meanmult=meanmult, stdmult=stdmult, nohyper=nohyper)
@@ -204,6 +215,21 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
     # opt = torch.optim.Adam(lr=lr, params = model.parameters())
     opt = torch.optim.Adam(lr=lr, params=model.parameters())
 
+    if warmup > 0:
+        # warmup = warmup / accumulate
+        # sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
+        for g in opt.param_groups:
+            g['max_lr'] = g['lr']
+            g['lr_delta'] = g['lr'] / warmup
+
+            g['lr'] = 0.0
+
+    cooldown_rate = 0.5 ** (1/cooldown)
+    # -- The cooldown rate is given in the number of instances to halve the learning rate over. This is the resulting
+    #    multiplier per instance.
+    last_cooldown = warmup
+
+    instances_seen = 0
     for i in (bar := trange(batches)):
 
         batch = torch.randint(high=num_tokens, size=(bs, rep), device=d())
@@ -222,8 +248,31 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
         rloss.backward()
 
         if i % acc == 0:
+            gn = gradient_norm(model)
+            if gc > 0.0:
+                nn.utils.clip_grad_norm_(model.parameters(), gc)
+
             opt.step()
             opt.zero_grad()
+
+            ### Admin
+            wandb.log({
+                'loss': loss.item(),
+                'kl': kl_loss.item(),
+                'gradient norm': gn,
+                'lr': opt.param_groups[0]['lr']
+            }, step=instances_seen, commit=True)
+
+        instances_seen += bs
+
+        if warmup > 0 and instances_seen <= warmup:
+            for g in opt.param_groups:
+                if g['lr'] < g['max_lr']:
+                    g['lr'] += g['lr_delta'] * batch.size(0)
+
+        if cooldown > 0 and instances_seen > warmup:
+            for g in opt.param_groups:
+                g['lr'] *= cooldown_rate ** batch.size(0)
 
         # print(parms.keys())
         # exit()
