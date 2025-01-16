@@ -482,7 +482,7 @@ def vae(num_batches=5_000, dim=4, batch_size=64, latent=4, lr=3e-4, kl_alpha=1, 
         x = torch.randn(n, dim, device=d())
         x = x / x.norm(dim=1, keepdim=True)
 
-        return x + torch.tensor([10] * dim)[None, :]
+        return x + torch.tensor([10] * dim, device=d())[None, :]
 
     sample = vsample(n=1024).detach().cpu().numpy()
     plt.scatter(sample[:, 0], sample[:, 1], s=2, alpha=0.5)
