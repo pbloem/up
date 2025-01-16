@@ -479,7 +479,7 @@ def vae(num_batches=5_000, dim=4, batch_size=64, latent=4, lr=3e-4, kl_alpha=1, 
         return mean + (0.5 * logvar).exp() * eps
 
     def data(n=64):
-        x = torch.randn(n, dim)
+        x = torch.randn(n, dim, device=d())
         x = x / x.norm(dim=1, keepdim=True)
 
         return x + torch.tensor([10] * dim)[None, :]
