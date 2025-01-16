@@ -10,6 +10,12 @@ import torch.nn.functional as F
 import tqdm, math
 from tqdm import trange
 
+from torch import distributions as dist
+
+import matplotlib as mpl
+mpl.use('Agg')
+from matplotlib import pyplot as plt
+
 """
 A test for a kind of hyperparametrization of the source model
 """
@@ -21,7 +27,7 @@ class LSTMGen(nn.Module):
     """
 
     def __init__(self, emb, mask_channel, layers=1, num_tokens=256, fake_hyper=False, latent=256,
-                 stdmult=1e-8, meanmult=1.0, skip_sample=False, nohyper=False):
+                 stdmult=1e-8, meanmult=1.0, skip_sample=False, nohyper=False, base=False):
         super().__init__()
 
         self.emb = emb
@@ -56,14 +62,19 @@ class LSTMGen(nn.Module):
 
             self.hyper = FH(self.total)
         else:  # real hypernetwork that samples them from a generator
-            # base parameters
-            self.base = nn.Parameter(torch.empty(size=(self.total,)))
-            torch.nn.init.uniform_(self.base, -math.sqrt(1 / emb), math.sqrt(1 / emb))
+            if base:
+                # base parameters
+                self.base = nn.Parameter(torch.empty(size=(self.total,)))
+                torch.nn.init.uniform_(self.base, -math.sqrt(1 / emb), math.sqrt(1 / emb))
+            else:
+                self.base = None
 
             # hypernet generates residual on top of the base.
             self.hyper = nn.Sequential(
-                nn.Linear(latent, self.total), nn.ReLU(),
-                nn.Linear(self.total, self.total*2), nn.ReLU(),
+                nn.Linear(latent, self.total * 2), nn.ReLU(),
+                nn.Linear(self.total * 2, self.total * 2), nn.ReLU(),
+                nn.Linear(self.total * 2, self.total * 2), nn.ReLU(),
+                nn.Linear(self.total * 2, self.total * 2), nn.ReLU(),
                 nn.Linear(self.total*2, self.total * 2)
             )
 
@@ -102,7 +113,10 @@ class LSTMGen(nn.Module):
                 eps = torch.randn_like(mean)
                 sample = mean + (0.5 * logvar).exp() * eps
 
-            x, hidden = torch.func.functional_call(self.lstm, slice(sample + self.base, self.sizes), x, strict=True)
+            if self.base is not None:
+                sample = sample + self.base
+
+            x, hidden = torch.func.functional_call(self.lstm, slice(sample, self.sizes), x, strict=True)
 
             if self.lastmean is None:
                 div_loss = torch.tensor([0.0], device=d())
@@ -140,9 +154,73 @@ class LSTMGen(nn.Module):
 
             tcov = x @ x.transpose(0, 1)
             # -- NB: The covariance matrix (X^TX) is huge, but the determinant of XX^T is the same and much smaller, so we compute that.
-            # The normalization constant (1/n^dim) is too big so we omit it. We are just looking for relative changes anyway
+            #    The normalization constant (1/n^t) is too big so we omit it. We are just looking for relative changes anyway
 
             return torch.linalg.det(tcov)
+
+    def init(self, batch_size=64, num_batches=5_000, lr=1e-4, kl_alpha=0.0001):
+        """
+        Train the hypernetwork to mimic the initialization distribution of the LSTM.
+
+        We do this by temporarily adding an encoder and training the whole thing as a VAE.
+
+        :return:
+        """
+
+        encoder = nn.Sequential(
+            nn.Linear(self.total,     self.total * 2), nn.ReLU(),
+            nn.Linear(self.total * 2, self.total * 2), nn.ReLU(),
+            nn.Linear(self.total * 2, self.total * 2), nn.ReLU(),
+            nn.Linear(self.total * 2, self.total * 2), nn.ReLU(),
+            nn.Linear(self.total * 2, self.latent * 2)
+        )
+
+        opt = torch.optim.Adam(lr=lr, params=list(encoder.parameters()) + list(self.hyper.parameters()))
+
+        print('Pretraining encoder.')
+        for _ in (bar := trange(num_batches)):
+
+            b = 1 / math.sqrt(self.emb)
+            batch = torch.rand(batch_size, self.total) *  2 * b - b
+
+            z = encoder(batch)
+            zm, zs = z[:, :self.latent], z[:, self.latent:]
+
+            sample = zm + (0.5 * zs.exp()) * torch.randn_like(zs)
+
+            out = self.hyper(sample)
+
+            om, os = out[:, :self.total], out[:, self.total:]
+
+            norm = dist.Normal(om, os.exp())
+            rloss = - norm.log_prob(batch).mean()
+            klloss = kl(zm, zs).mean()
+            loss = rloss + kl_alpha * klloss
+
+            loss.backward()
+            opt.step()
+            opt.zero_grad()
+
+            bar.set_postfix({
+                'rl': rloss.item(),
+                'kl': klloss.item(),
+            })
+
+        del encoder
+
+    def hyper_sample(self, n=256):
+        """
+        Sample a batch from the hypernet
+
+        :param n:
+        :return:
+        """
+
+        z = torch.randn(size=(n, self.latent,), device=d())
+        rawparm = self.hyper(z)
+        mean, logvar = rawparm[:, :self.total], rawparm[:, self.total:]
+        eps = torch.randn_like(mean)
+        return mean + (0.5 * logvar).exp() * eps
 
     def sample_sequence(self, seed, max_context, num_tokens, length=600, temperature=0.5, conditional=None, verbose=False):
         """
@@ -230,6 +308,20 @@ def slice(raw, sizes):
     return res
 
 
+def kl_batch(zmean, zsig):
+    b, l = zmean.size()
+
+    kl = 0.5 * torch.sum(zsig.exp() - zsig + zmean.pow(2) - 1, dim=1)
+    # -- The KL divergence between a given normal distribution and a standard normal distribution
+    #    can be rewritten this way. It's a good exercise to work this out.
+
+    assert kl.size() == (b,)
+    # -- At this point we want the loss to be a single value of each instance in the batch.
+    #    Asserts like this are a good way to document what you know about the shape of the
+    #    tensors you deal with.
+
+    return kl
+
 def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
        latent=256, kl_alpha=1.0, b_alpha=1.0, acc=3, fake_hyper=False, skip_sample=False, stdmult=1e-8, nohyper=False, meanmult=1.0,
        warmup=5_000, cooldown=-1, gc=1.0, name='hyper-test', project='hyper-test', debug=False, div_alpha=1.0):
@@ -246,6 +338,22 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
 
     if torch.cuda.is_available():
         model.cuda()
+
+    sample = model.hyper_sample(n=1024).detach().cpu().numpy()
+    plt.scatter(sample[:, 1], sample[:, 2], s=2, alpha=0.5)
+    plt.savefig('before.png')
+
+    b = 1 / math.sqrt(model.emb)
+    sample = torch.rand(1024, model.total) *  2 * b - b
+    plt.scatter(sample[:, 1], sample[:, 2], s=2, alpha=0.5)
+    plt.savefig('beforeandtarget.png')
+
+
+    model.init(num_batches=1_500)
+    sample = model.hyper_sample(n=1024).detach().cpu().numpy()
+
+    plt.scatter(sample[:, 1], sample[:, 2], s=2, alpha=0.5)
+    plt.savefig('after.png')
 
     # opt = torch.optim.Adam(lr=lr, params = model.parameters())
     opt = torch.optim.Adam(lr=lr, params=model.parameters())
@@ -318,6 +426,102 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
 
         # print(parms.keys())
         # exit()
+
+
+def vae(num_batches=5_000, dim=4, batch_size=64, latent=4, lr=3e-4, kl_alpha=1, skip_sample=False, mult=6):
+    """
+    Quick check whether a VAE can model a uniform dist.
+
+    :param num_batches:
+    :param dim:
+    :param batch_size:
+    :param latent:
+    :param lr:
+    :return:
+    """
+
+    nl = nn.LeakyReLU
+
+    encoder = nn.Sequential(
+        nn.Linear(dim, dim * mult), nl(),
+        nn.Linear(dim * mult, dim * mult), nl(),
+        nn.Linear(dim * mult, dim * mult), nl(),
+        nn.Linear(dim * mult, dim * mult), nl(),
+        nn.Linear(dim * mult, latent * 2)
+    )
+
+    decoder = nn.Sequential(
+        nn.Linear(latent, dim * mult), nl(),
+        nn.Linear(dim * mult, dim * mult), nl(),
+        nn.Linear(dim * mult, dim * mult), nl(),
+        nn.Linear(dim * mult, dim * mult), nl(),
+        nn.Linear(dim * mult, dim * 2)
+    )
+
+    opt = torch.optim.Adam(lr=lr, params=list(encoder.parameters()) + list(decoder.parameters()))
+
+    def vsample(n=256):
+        """
+        Sample a batch from the hypernet
+
+        :param n:
+        :return:
+        """
+
+        z = torch.randn(size=(n, latent,), device=d())
+        rawparm = decoder(z)
+        mean, logvar = rawparm[:, :dim], rawparm[:, dim:]
+        eps = torch.randn_like(mean)
+        return mean + (0.5 * logvar).exp() * eps
+
+    def data(n=64):
+        x = torch.randn(n, dim)
+        x = x / x.norm(dim=1, keepdim=True)
+
+        return x + torch.tensor([10] * dim)[None, :]
+
+    sample = vsample(n=1024).detach().cpu().numpy()
+    plt.scatter(sample[:, 0], sample[:, 1], s=2, alpha=0.5)
+    plt.savefig('before.png')
+
+    sample = data(n=1024).detach().cpu().numpy()
+    plt.scatter(sample[:, 0], sample[:, 1], s=2, alpha=0.5)
+    plt.savefig('beforeandtarget.png')
+
+    for _ in (bar := trange(num_batches)):
+
+        batch = data(n=batch_size)
+
+        z = encoder(batch)
+        zm, zs = z[:, :latent], z[:, latent:]
+
+        if skip_sample:
+            sample = zm
+        else:
+            sample = zm + (0.5 * zs.exp()) * torch.randn_like(zs)
+
+        o = decoder(sample)
+        om, os = o[:, :dim], o[:, dim:]
+
+        norm = dist.Normal(om, os.exp())
+        rloss = - norm.log_prob(batch).mean()
+        # rloss = ((om - batch) ** 2).sum(dim=1).mean()
+        klloss = kl_batch(zm, zs).mean()
+
+        loss = rloss + kl_alpha * klloss
+
+        loss.backward()
+        opt.step()
+        opt.zero_grad()
+
+        bar.set_postfix({
+            'rl': rloss.item(),
+            'kl': klloss.item(),
+        })
+
+    sample = vsample(n=1024).detach().cpu().numpy()
+    plt.scatter(sample[:, 0], sample[:, 1], s=2, alpha=0.5)
+    plt.savefig('after.png')
 
 if __name__ == '__main__':
     fire.Fire()
