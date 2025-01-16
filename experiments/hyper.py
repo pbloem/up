@@ -458,6 +458,10 @@ def vae(num_batches=5_000, dim=4, batch_size=64, latent=4, lr=3e-4, kl_alpha=1, 
         nn.Linear(dim * mult, dim * 2)
     )
 
+    if torch.cuda.is_available():
+        encoder.cuda()
+        decoder.cuda()
+
     opt = torch.optim.Adam(lr=lr, params=list(encoder.parameters()) + list(decoder.parameters()))
 
     def vsample(n=256):
