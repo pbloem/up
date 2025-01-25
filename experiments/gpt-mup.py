@@ -16,6 +16,7 @@ import torch.nn.functional as F
 import numpy as np
 
 from tqdm import trange
+from collections import Counter
 
 """
 Experiment 1: We train a GPT-style transformer on the Hutter prize data (100MB of wikpidia text), and test the influence
@@ -26,7 +27,7 @@ Experiment 1: We train a GPT-style transformer on the Hutter prize data (100MB o
 NUM_TOKENS = 256
 LOG2E = math.log2(math.e)
 LOGE2 = math.log(2.0)
-REPS = [1, 3, 10]
+REPS = [1, 3, 10] # rep evaluation
 
 def print_batch(batch, ascii_only):
 
@@ -289,8 +290,9 @@ def go(
          lstmtemp=0.0,
          lstmseed=8,
          lstmreset=(50,50),             # How many instances of the buffer to reset to constant and random sequences resp.
-         lstmembmult=1e-8               # multiplier for the token embedding weights. Setting this very low results in a
+         lstmembmult=1e-8,              # multiplier for the token embedding weights. Setting this very low results in a
                                         # good, predictable transition to chaos.
+         lstmgpu=False                  # Run the LSTM generator on the GPU (doesn't always result in the same dynamics as on CPU)
 ):
 
     """
@@ -308,7 +310,8 @@ def go(
 
     """
 
-    # Compute some values that should be logger to wandb
+    # Compute some properties of the architecture
+    # -- We compute them before the wandb.init() so that they get  logged to wandb
     # width = wfactor * width_per_step
     depth = get_depth(width)
 
@@ -328,7 +331,7 @@ def go(
     assert width % heads == 0
 
     # Sweep parms. If these are tuples, we sample a random value in between two given extremes or, for discrete-valued
-    # parameters, we sample from a range of options.
+    # parameters, we sample from a range of options. If a single value is given, we just use that value
     weight_mult1 = rsamp(weight_mult1)
     weight_mult2 = rsamp(weight_mult2)
     weight_multb = rsamp(weight_multb)
@@ -498,7 +501,10 @@ def go(
 
         source = up.LSTMGen(lstmemb, mask_channel=False, num_tokens=NUM_TOKENS, layers=lstmlayers)
 
-        buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, 1), device="cpu")
+        lstmdev = 'cuda' if ( lstmgpu and torch.cuda.is_available()) else 'cpu'
+        source.to(lstmdev)
+
+        buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, 1), device=lstmdev)
         buffer = buffer.tile((1, context))
         #-- We init the buffer with constant sequences (i.e. those filled with a single repeating token). This ensures
         #   that the LSTM is conditioned on a simple sequence and starts by generating highly regular sequences.
@@ -511,9 +517,9 @@ def go(
                 # replace some random rows in the buffer with constant and random sequences
                 con, ran = lstmreset
 
-                crows = torch.randint(low=0, high=NUM_TOKENS, size=(con, 1), device="cpu")
+                crows = torch.randint(low=0, high=NUM_TOKENS, size=(con, 1), device=lstmdev)
                 crows = crows.tile((1, context))
-                rrows = torch.randint(low=0, high=NUM_TOKENS, size=(ran, context), device="cpu")
+                rrows = torch.randint(low=0, high=NUM_TOKENS, size=(ran, context), device=lstmdev)
 
                 rows = torch.cat((crows, rrows), dim=0)
                 idx = random.sample(range(buffer_size), rows.size(0))
@@ -1008,6 +1014,10 @@ def set_lr(lr, opt):
 
 
 def repeval(model, context:int, rep:int, batch_size:int, nbatches :int):
+    """
+    Evaluate on repeated random sequence of length `rep`.
+    :return:
+    """
     bits = 0.0
     tokens = 0.0
 
@@ -1030,6 +1040,54 @@ def repeval(model, context:int, rep:int, batch_size:int, nbatches :int):
 
     return bits/tokens
 
+def cycle(tensor):
+    return torch.cat((tensor[:, 1:], tensor[:, :1]), dim=1)
+
+def reverse(tensor):
+    return tensor.flip(dims=(1,))
+
+def cyceval(model, context:int, n:int, batch_size:int, nbatches :int):
+    """
+    Sequence of cyclic permutations
+    :param model:
+    :param context:
+    :param n:
+    :param batch_size:
+    :param nbatches:
+    :return:
+    """
+
+    bits = 0.0
+    tokens = 0.0
+
+    reps = context // (n*2)
+
+    for i in range(nbatches):
+
+        seed = torch.randint(low=0, high=NUM_TOKENS, size=(batch_size, n), device=d())
+        chunks = []
+        for _ in range(reps):
+            seed = cycle(seed)
+            chunks.append(seed)
+            seed = reverse(seed)
+            chunks.append(seed)
+
+
+        chars = torch.cat(chunks, dim=1)[:, :context]
+
+        input  = chars[:, :-1]
+        target = chars[:, 1:]
+
+        output = model(input.to(torch.int))
+
+        batch_nats = F.cross_entropy(output.permute(0, 2, 1), target, reduction='none')
+        batch_bits = batch_nats * LOG2E
+
+        bits += batch_bits.sum().item()
+        tokens += batch_bits.numel()
+
+    return bits/tokens
+
 def lstm_scale(lstm : nn.LSTM, weight_mult=1.0, bias_mult=1.0):
 
     l = lstm.num_layers
@@ -1042,6 +1100,8 @@ def lstm_scale(lstm : nn.LSTM, weight_mult=1.0, bias_mult=1.0):
         for b in getattr(lstm, 'bias_ih_l'+ str(k)), getattr(lstm, 'bias_hh_l'+ str(k)):
             b.data *= bias_mult
 
+def test(n):
+    cyceval(None, context=32, n=n, batch_size=16, nbatches=1)
 
 if __name__ == '__main__':
     fire.Fire()
