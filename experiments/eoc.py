@@ -445,7 +445,6 @@ def lstm_sample_auto(
             chars[2,16] = (chars[2, 16] + 1) % num_tokens
             chars[3,28] = (chars[3, 28] + 1) % num_tokens
 
-
             lsamp = random.randrange(*layers)
             source = up.LSTMGen(emb, mask_channel=False, layers=lsamp)
 
@@ -469,7 +468,6 @@ def lstm_sample_auto(
         for seq in chars.tolist():
             print(''.join([str(s) if s < 9 else '_' for s in up.util.remap(seq, 9)][:200]))
         print('---')
-
 
 def lstm_sample_plot(
         emb=128,
@@ -998,11 +996,28 @@ def lstm_eoc(emb=256, num_tokens=256):
 
     source = up.LSTMGen(emb=emb, mask_channel=False, num_tokens=num_tokens)
 
+def bits(l=512):
+
+    b = [True, False]
+    op = ['and']
+    while len(b) < l:
+        for o in op:
+            nxt = doop(b[-2], b[-1], o)
+            b.append(nxt)
+            b.append(random.choice((True, False)))
 
 
+    print(''.join('1' if bit else '0' for bit in b))
+    # return b
 
-
-
+def doop(x, y, op):
+    if op == 'and':
+        return x and y
+    if op == 'or':
+        return x or y
+    if op == 'xor':
+        return (x and not y) or (not x and y)
+    return not y
 
 if __name__ == '__main__':
     fire.Fire()

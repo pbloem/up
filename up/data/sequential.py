@@ -36,19 +36,21 @@ MARKOV = {
     'ndfa' : [3.4569746915375603, 0.6658862666099562, 0.2942196511608079, 0.2942189625751208, 0.2942892796818609, 0.29438668804011764],
     'toy' : [4.196220178391961, 2.2355184935857064, 0.9741857673348161, 0.7252455261062091, 0.6389911594450575, 0.6320596343654071],
     'bits': [1.1733818782355905, 1.1691583755645572, 1.166750905432737, 1.164872046306139, 1.1631674006093808, 1.1381807911247805],
-    'champ': [4.020301090644664, 4.182040925227881, 4.475985937327467, 4.309589578934016, 4.104379828690582, 4.090988560452365]
+    'champ': [4.020301090644664, 4.182040925227881, 4.475985937327467, 4.309589578934016, 4.104379828690582, 4.090988560452365],
+    'bitsrep': [1.000061690176759, 1.0001037284531082, 1.0001749039272738, 0.6483094648040643, 0.6241204968147399, 0.6224601673202647],
 }
 
 """
 Context-based Markov model performance.
 """
 MARKOV_CTX = {
-    'wp' : [4.9800, 4.8119, 5.6298, 6.3050, 6.7800, 7.0469],   # 4.81
-    'dyck' : [1.3888, 1.1604, 1.1765, 1.0077, 1.0747, 1.1769], # 1.0
-    'ndfa' : [3.5141, 0.7293, 0.3716, 0.3918, 0.4352, 0.5322], # 0.37
-    'toy' : [4.2825, 2.6090, 1.9711, 2.4323, 2.8710, 3.3567],  # 1.97
-    'bits': [1.1875, 1.1961, 1.2226, 1.2693, 1.3434, 1.4328],  # 1.22
-    'champ': [3.3676, 2.4247, 2.6952, 3.3094, 3.9252, 4.3293]  # 2.42
+    'wp' : [4.9800, 4.8119, 5.6298, 6.3050, 6.7800, 7.0469],     # 4.81
+    'dyck' : [1.3888, 1.1604, 1.1765, 1.0077, 1.0747, 1.1769],   # 1.0
+    'ndfa' : [3.5141, 0.7293, 0.3716, 0.3918, 0.4352, 0.5322],   # 0.37
+    'toy' : [4.2825, 2.6090, 1.9711, 2.4323, 2.8710, 3.3567],    # 1.97
+    'bits': [1.1875, 1.1961, 1.2226, 1.2693, 1.3434, 1.4328],    # 1.22
+    'champ': [3.3676, 2.4247, 2.6952, 3.3094, 3.9252, 4.3293],   # 2.42
+    'bitsrep': [1.0057, 1.0127, 1.0215, 0.6922, 0.6957, 0.7379], # 0.62
 }
 
 def load_imdb(final=False, val=5000, seed=0, voc=None, char=False):
@@ -201,6 +203,16 @@ def gen_bits(wordlength=5):
 
     return ''.join('0' if b else '1' for b in (w1 + w2 + wxor + wand + wor + weq))
 
+def gen_bitsrep(wordlength=3, rep=3):
+    """
+    Returns a random sequence of `wordlength` bits, repeated `rep` times
+    :param wordlength:
+    :param rep:
+    :return:
+    """
+    word = [random.choice(('0', '1')) for _ in range(wordlength)]
+    return ''.join(b for b in (word * rep))
+
 def gen_champ(length=256, mx=16777216):
     """
     Generator inspired by the Champernowne constant 0.123456789101112...
@@ -236,7 +248,7 @@ def to_bytes(s:str):
 
     return res
 
-def to_str(ls):
+def to_str(ls, printable=True):
     """
     Converts a list of integers representing bytes to a (printable) string.
     :param ls:
@@ -245,12 +257,13 @@ def to_str(ls):
     res = ''
 
     for i in ls:
-        res += cas(i)
+        res += cas(i) if printable else chr(i)
 
     return res
 
 PRINTABLE = set(string.digits + string.ascii_letters + string.punctuation)
 #-- NB we don't print whitespace
+
 def cas(i):
     """
     Character-as-string. Filters out the ascii codes that aren't safe to print.
@@ -260,9 +273,17 @@ def cas(i):
     assert i >= 0 and i < 256
     return '□' if i not in PRINTABLE else str(chr(i))
 
-def load_str(name='dyck', num_chars=100_000, final=False):
+def load_str(name='dyck', num_chars=100_000, final=False, printable=True):
+    """
+
+    :param name:
+    :param num_chars:
+    :param final:
+    :param printable: Ensure that the string is printable (this may collapse some characters into a single one)
+    :return:
+    """
     res = load_data(name, num_chars, final)
-    return to_str(res)
+    return to_str(res, printable=printable)
 
 def load_data(name='dyck', num_chars=100_000, final=False, char_offset=0):
     """
@@ -273,7 +294,8 @@ def load_data(name='dyck', num_chars=100_000, final=False, char_offset=0):
     :return:
     """
 
-    gen = {
+    # Generators with delimiter
+    gen_delim = {
         'dyck' : gen_dyck,
         'ndfa' : gen_ndfa,
         'toy'  : gen_sentence,
@@ -281,13 +303,26 @@ def load_data(name='dyck', num_chars=100_000, final=False, char_offset=0):
         'champ': gen_champ,
     }
 
-    if name in gen.keys():
+    # Generators without delimiter
+    gen_nodelim = {
+        'bitsrep' : gen_bitsrep,
+    }
+
+    if name in gen_delim.keys():
         res = '|'
         while len(res) < num_chars:
-            res += gen[name]()
+            res += gen_delim[name]()
             res += '|'
 
         return [c + char_offset for c in to_bytes(res)]
+
+    if name in gen_nodelim.keys():
+        res = ''
+        while len(res) < num_chars:
+            res += gen_nodelim[name]()
+
+        res = [c + char_offset for c in to_bytes(res)]
+        return res
 
     if name == 'wp':
         if final:

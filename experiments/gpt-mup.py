@@ -350,12 +350,12 @@ def go(
 
     if eval_ood:
         datasets = {
-            'champ': torch.tensor(load_data('champ'), dtype=torch.long),
-            'dyck' : torch.tensor(load_data('dyck'), dtype=torch.long),
-            'ndfa' : torch.tensor(load_data('ndfa'), dtype=torch.long),
-            'toy'  : torch.tensor(load_data('toy'),  dtype=torch.long),
-            'bits' : torch.tensor(load_data('bits'), dtype=torch.long),
-            'wp'   : torch.tensor(load_data('wp-val'), dtype=torch.long),
+            'champ'   : torch.tensor(load_data('champ'), dtype=torch.long),
+            'dyck'    : torch.tensor(load_data('dyck'), dtype=torch.long),
+            'ndfa'    : torch.tensor(load_data('ndfa'), dtype=torch.long),
+            'toy'     : torch.tensor(load_data('toy'),  dtype=torch.long),
+            'bitsrep' : torch.tensor(load_data('bitsrep'), dtype=torch.long),
+            'wp'      : torch.tensor(load_data('wp-val'), dtype=torch.long),
         }
     else:
         datasets = {

@@ -30,6 +30,8 @@ class LSTMGen(nn.Module):
                  stdmult=1e-8, meanmult=1.0, skip_sample=False, nohyper=False, base=False):
         super().__init__()
 
+        self.nl = nn.LeakyReLU
+
         self.emb = emb
         self.num_tokens = num_tokens
         self.latent = latent
@@ -71,10 +73,10 @@ class LSTMGen(nn.Module):
 
             # hypernet generates residual on top of the base.
             self.hyper = nn.Sequential(
-                nn.Linear(latent, self.total * 2), nn.ReLU(),
-                nn.Linear(self.total * 2, self.total * 2), nn.ReLU(),
-                nn.Linear(self.total * 2, self.total * 2), nn.ReLU(),
-                nn.Linear(self.total * 2, self.total * 2), nn.ReLU(),
+                nn.Linear(latent, self.total * 2), self.nl,
+                nn.Linear(self.total * 2, self.total * 2), self.nl,
+                nn.Linear(self.total * 2, self.total * 2), self.nl,
+                nn.Linear(self.total * 2, self.total * 2), self.nl,
                 nn.Linear(self.total*2, self.total * 2)
             )
 
@@ -431,6 +433,8 @@ def go(emb=32, bs=64, batches=500, rep=2, num_tokens=256, context=256, lr=3e-4,
 def vae(num_batches=5_000, dim=4, batch_size=64, latent=4, lr=3e-4, kl_alpha=1, skip_sample=False, mult=6):
     """
     Quick check whether a VAE can model a uniform dist.
+
+    This works,
 
     :param num_batches:
     :param dim:

@@ -18,11 +18,11 @@ def go(name='toy', num_chars=100_000, context=False, train_windows=10_000, test_
     print(f'# {name}')
 
     if name != 'wp':
-        train, val, test = load_str(name=name, num_chars=num_chars), load_str(name=name, num_chars=num_chars), \
-                       load_str(name=name, num_chars=num_chars)
+        train, val, test = load_str(name=name, num_chars=num_chars, printable=False), load_str(name=name, num_chars=num_chars, printable=False), \
+                       load_str(name=name, num_chars=num_chars, printable=False)
     else:
-        train, val, test = load_str(name='wp-train'), load_str(name='wp-val'), \
-                       load_str(name='wp-test')
+        train, val, test = load_str(name='wp-train', printable=False), load_str(name='wp-val', printable=False), \
+                       load_str(name='wp-test', printable=False)
 
     print('sample')
     print(train[:120])
