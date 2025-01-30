@@ -362,7 +362,7 @@ def go(
     if eval_test:
         testsets = {
             'wp'       : torch.tensor(load_data('wp-test'), dtype=torch.long),
-            'german'   : torch.tensor(load_data('german'), dtype=torch.long),
+            'german'   : torch.tensor(load_data('german-test'), dtype=torch.long),
             'aut'      : torch.tensor(load_data('aut'), dtype=torch.long),
             'toy2'     : torch.tensor(load_data('toy2'), dtype=torch.long),
             'bitsflip' : torch.tensor(load_data('bitsflip'),  dtype=torch.long),
