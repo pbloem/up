@@ -292,7 +292,8 @@ def go(
          lstmreset=(50,50),             # How many instances of the buffer to reset to constant and random sequences resp.
          lstmembmult=1e-8,              # multiplier for the token embedding weights. Setting this very low results in a
                                         # good, predictable transition to chaos.
-         lstmgpu=False                  # Run the LSTM generator on the GPU (doesn't always result in the same dynamics as on CPU)
+         lstmgpu=False,                 # Run the LSTM generator on the GPU (doesn't always result in the same dynamics as on CPU)
+         eval_test=False,               # Whether to evaluate on the text sets
 ):
 
     """
@@ -357,6 +358,17 @@ def go(
             'bitsrep' : torch.tensor(load_data('bitsrep'), dtype=torch.long),
             'wp'      : torch.tensor(load_data('wp-val'), dtype=torch.long),
         }
+
+    if eval_test:
+        testsets = {
+            'wp'       : torch.tensor(load_data('wp-test'), dtype=torch.long),
+            'german'   : torch.tensor(load_data('german'), dtype=torch.long),
+            'aut'      : torch.tensor(load_data('aut'), dtype=torch.long),
+            'toy2'     : torch.tensor(load_data('toy2'), dtype=torch.long),
+            'bitsflip' : torch.tensor(load_data('bitsflip'),  dtype=torch.long),
+            'code'     : torch.tensor(load_data('code'), dtype=torch.long),
+        }
+
     else:
         datasets = {
             'wp'   : torch.tensor(load_data('wp-val'), dtype=torch.long)
@@ -370,7 +382,8 @@ def go(
     model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, nl=nl(nl_target),
                             num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor, kqnorm=kqnorm,
                             attn_factor=attn_factor, num_progblocks=max(depth - freeze_blocks, 0))
-    # -- Note: the first block of layers consists of regular blocks, the rest are prog blocks.
+    # -- Note: the first block of layers consists of regular blocks, the rest are frozen blocks (these are progressively unfrozen)
+    #    as training progresses.
 
     if torch.cuda.is_available():
         model.cuda()
@@ -659,11 +672,19 @@ def go(
 
     results = { # All relevant results, to be saved as a json file after each eval.
         'vals' : {},
+        'tests' : {},
         'locals' : locals()
     }
 
     for name in list(datasets.keys()) + [f'rep-{r}' for r in REPS]:
         results['vals'][name] = {
+            'instances' : [],
+            'bits' :  [],
+            'microbatches' : [],
+        }
+
+    for name in list(testsets.keys()):
+        results['tests'][name] = {
             'instances' : [],
             'bits' :  [],
             'microbatches' : [],
@@ -732,6 +753,26 @@ def go(
                 results['vals'][name]['instances'].append(instances_seen)
                 results['vals'][name]['bits'].append(est)
                 results['vals'][name]['microbatches'].append(i)
+
+            if eval_test:
+                for name, data in testsets.items():
+                    print(f'evaluating {name}')
+
+                    with torch.no_grad():
+                        est = estimate_compression(
+                            model=model,
+                            data=data,
+                            nsamples=eval_samples,
+                            context=context,
+                            batch_size=valbs,
+                            model_produces_logits=True
+                        )
+
+                    wandb.log({f'test/{name}': est}, step=instances_seen)
+
+                    results['tests'][name]['instances'].append(instances_seen)
+                    results['tests'][name]['bits'].append(est)
+                    results['tests'][name]['microbatches'].append(i)
 
             last_eval = instances_seen
             with open(f'./{wdname}.json', 'w') as f:

@@ -999,12 +999,12 @@ def lstm_eoc(emb=256, num_tokens=256):
 def bits(l=512):
 
     b = [True, False]
-    op = ['and']
+    op = ['xor', 'and', 'or']
     while len(b) < l:
         for o in op:
             nxt = doop(b[-2], b[-1], o)
             b.append(nxt)
-            b.append(random.choice((True, False)))
+        b.append(random.choice((True, False)))
 
 
     print(''.join('1' if bit else '0' for bit in b))

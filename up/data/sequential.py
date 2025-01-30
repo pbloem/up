@@ -3,6 +3,9 @@ import string
 import wget, os, gzip, pickle, random, re, sys
 
 from former.util import enwik8_bytes
+from ..util import here
+
+import numpy as np
 
 IMDB_URL = 'http://dlvu.github.io/data/imdb.{}.pkl.gz'
 IMDB_FILE = 'imdb.{}.pkl.gz'
@@ -10,7 +13,6 @@ IMDB_FILE = 'imdb.{}.pkl.gz'
 PAD, START, END, UNK = '.pad', '.start', '.end', '.unk'
 
 SENT = '_s'
-
 TOY = {
     '_s': ['_s _adv', '_np _vp', '_np _vp _prep _np', '_np _vp ( _prep _np )', '_np _vp _con _s',
            '_np _vp ( _con _s )'],
@@ -23,6 +25,16 @@ TOY = {
     '_adj': ['short', 'quick', 'busy', 'nice', 'gorgeous']
 }
 
+SENT2 = '_exp'
+TOY2 = {
+    '_exp' : (['_exp + _addpart', '_exp - _addpart', '_addpart'], (.2,.2,.6)),
+    '_addpart' : (['_addpart * _mulpart', '_addpart / _mulpart', '_mulpart'], (.2,.2,.6)),
+    '_mulpart' : (['_group ^ _mulpart', '_group'], (.2,.8)),
+    '_group' : (['_var', '(_exp)'], (.8, .2)),
+    '_var': (['x', 'y', 'z'], None), # None -> uniform
+}
+#-- Example adapted from "A Practical Tutorial on Context Free Grammars" by Dr. Robert B. Heckendorn (March 17, 2021)
+
 """
 The test set performance (in bits-per-byte) of a n-th order Markov model with 0.01 Laplace smoothing. See experiments/markov
 for the code that was used to compute these.
@@ -32,25 +44,35 @@ were generated for train, test and val, and for wikipedia, the canonical splits 
 """
 MARKOV = {
     'wp' : [5.106629000536541, 3.920734110007795, 3.0992338340343406, 2.5360331955140865, 2.2364564738213955, 2.1894437828412445],
+    'german': [5.061789707374291, 3.904879749867616, 3.4170280458442797, 3.245745778178404, 3.1750552270249495, 3.354520988175693],
     'dyck' : [1.37402480190898, 1.1336195970119751, 1.133641671511376, 0.9372411063969551, 0.9372486322251692, 0.8904998264766827],
     'ndfa' : [3.4569746915375603, 0.6658862666099562, 0.2942196511608079, 0.2942189625751208, 0.2942892796818609, 0.29438668804011764],
+    'aut' : [1.3278644883850057, 1.2804112582182614, 1.1047869819199714, 1.0670933416188109, 0.9906980503949275, 0.9707746666416794],
     'toy' : [4.196220178391961, 2.2355184935857064, 0.9741857673348161, 0.7252455261062091, 0.6389911594450575, 0.6320596343654071],
+    'toy2' : [2.9400592850039633, 1.7941291245653623, 1.3606002289065475, 1.3620481806725018, 1.3640742940813833, 1.3780336106307223],
     'bits': [1.1733818782355905, 1.1691583755645572, 1.166750905432737, 1.164872046306139, 1.1631674006093808, 1.1381807911247805],
     'champ': [4.020301090644664, 4.182040925227881, 4.475985937327467, 4.309589578934016, 4.104379828690582, 4.090988560452365],
     'bitsrep': [1.000061690176759, 1.0001037284531082, 1.0001749039272738, 0.6483094648040643, 0.6241204968147399, 0.6224601673202647],
+    'bitsflip': [1.000074154717487, 0.9953309358413249, 0.995262314805013, 0.986348637183013, 0.9858847570969156, 0.9711596495840878],
+    'code': [5.282956440772358, 4.287111403898651, 3.3423394276797116, 3.34721634546682, 3.685955590714477, 3.990117372241228],
 }
 
 """
 Context-based Markov model performance.
 """
 MARKOV_CTX = {
-    'wp' : [4.9800, 4.8119, 5.6298, 6.3050, 6.7800, 7.0469],     # 4.81
-    'dyck' : [1.3888, 1.1604, 1.1765, 1.0077, 1.0747, 1.1769],   # 1.0
-    'ndfa' : [3.5141, 0.7293, 0.3716, 0.3918, 0.4352, 0.5322],   # 0.37
-    'toy' : [4.2825, 2.6090, 1.9711, 2.4323, 2.8710, 3.3567],    # 1.97
-    'bits': [1.1875, 1.1961, 1.2226, 1.2693, 1.3434, 1.4328],    # 1.22
-    'champ': [3.3676, 2.4247, 2.6952, 3.3094, 3.9252, 4.3293],   # 2.42
-    'bitsrep': [1.0057, 1.0127, 1.0215, 0.6922, 0.6957, 0.7379], # 0.62
+    'wp' : [4.9800, 4.8119, 5.6298, 6.3050, 6.7800, 7.0469],      # 4.81
+    'german' : [4.7195, 4.4797, 5.4201, 6.1300, 6.4844, 6.6779],  # 4.47
+    'dyck' : [1.3888, 1.1604, 1.1765, 1.0077, 1.0747, 1.1769],    # 1.0
+    'ndfa' : [3.5141, 0.7293, 0.3716, 0.3918, 0.4352, 0.5322],    # 0.37
+    'aut': [1.3315, 1.2994, 1.1592, 1.1775, 1.1911, 1.2878],      # 1.3 / 0.97
+    'toy' : [4.2825, 2.6090, 1.9711, 2.4323, 2.8710, 3.3567],     # 1.97
+    'toy2': [2.9741, 1.8884, 1.6806, 2.1302, 2.8098, 3.3454],     # 1.68
+    'bits': [1.1875, 1.1961, 1.2226, 1.2693, 1.3434, 1.4328],     # 1.22
+    'champ': [3.3676, 2.4247, 2.6952, 3.3094, 3.9252, 4.3293],    # 2.42
+    'bitsrep': [1.0057, 1.0127, 1.0215, 0.6922, 0.6957, 0.7379],  # 0.62
+    'bitsflip': [1.0065, 1.0092, 1.0180, 1.0251, 1.0579, 1.0995], # 1.0 / 0.97
+    'code': [5.2035, 4.4917, 4.4966, 4.9268, 5.3235, 5.5718],     # 4.5
 }
 
 def load_imdb(final=False, val=5000, seed=0, voc=None, char=False):
@@ -117,6 +139,27 @@ def gen_sentence(sent=SENT, g=TOY):
         s = match.span()
         sent = sent[:s[0]] + random.choice(g[sent[s[0]:s[1]]]) + sent[s[1]:]
 
+def gen_sentence_prob(sent=SENT, g=TOY):
+
+    symb = '_[a-z]*'
+
+    while True:
+
+        match = re.search(symb, sent)
+        if match is None:
+            return sent
+
+        s = match.span()
+        symbol = sent[s[0]:s[1]]
+
+        reps, probs = g[symbol]
+        choice = np.random.choice(reps, p=probs)
+
+        sent = sent[:s[0]] + choice + sent[s[1]:]
+
+def gen_sentence2(sent=SENT):
+    return gen_sentence_prob(SENT2, TOY2)
+
 def gen_dyck(p=7/16):
     open = 1
     sent = '('
@@ -140,6 +183,26 @@ def gen_ndfa(p=1/4):
             return 's' + s + 's'
         else:
             s+= word
+
+GERMAN_SPLIT = 800_000, 200_000 # train and val size, remainder is test
+def load_german():
+
+    with open(here('./up/data/frauenfrage.txt'), 'r') as file:
+        ff = file.read()
+
+    train, val, test = ff[:GERMAN_SPLIT[0]], ff[GERMAN_SPLIT[0]:GERMAN_SPLIT[0]+GERMAN_SPLIT[1]], ff[GERMAN_SPLIT[0]+GERMAN_SPLIT[1]:]
+
+    return train, val, test
+
+CODE_SPLIT = 170_000, 40_000 # train and val size, remainder is test
+def load_code():
+
+    with open(here('./up/data/code.js'), 'r') as file:
+        code = file.read()
+
+    train, val, test = code[:CODE_SPLIT[0]], code[CODE_SPLIT[0]:CODE_SPLIT[0]+CODE_SPLIT[1]], code[CODE_SPLIT[0]+CODE_SPLIT[1]:]
+
+    return train, val, test
 
 def load_brackets(n=50_000, seed=0):
     return load_toy(n, char=True, seed=seed, name='dyck')
@@ -212,6 +275,37 @@ def gen_bitsrep(wordlength=3, rep=3):
     """
     word = [random.choice(('0', '1')) for _ in range(wordlength)]
     return ''.join(b for b in (word * rep))
+
+def gen_bitsflip(wordlength=6):
+    """
+    Returns a random sequence of `wordlength` bits, repeated `rep` times
+    :param wordlength:
+    :param rep:
+    :return:
+    """
+    word = [random.choice(('0', '1')) for _ in range(wordlength)]
+    return ''.join(b for b in (word + word[::-1]) )
+
+
+def gen_bitsxor():
+
+    b = [True, False]
+    op = ['xor']
+    for o in op:
+        nxt = doop(b[-2], b[-1], o)
+        b.append(nxt)
+    b.append(random.choice((True, False)))
+
+    return ''.join('1' if bit else '0' for bit in b)
+
+def doop(x, y, op):
+    if op == 'and':
+        return x and y
+    if op == 'or':
+        return x or y
+    if op == 'xor':
+        return (x and not y) or (not x and y)
+    return not y
 
 def gen_champ(length=256, mx=16777216):
     """
@@ -299,6 +393,7 @@ def load_data(name='dyck', num_chars=100_000, final=False, char_offset=0):
         'dyck' : gen_dyck,
         'ndfa' : gen_ndfa,
         'toy'  : gen_sentence,
+        'toy2' : gen_sentence2,
         'bits' : gen_bits,
         'champ': gen_champ,
     }
@@ -306,6 +401,8 @@ def load_data(name='dyck', num_chars=100_000, final=False, char_offset=0):
     # Generators without delimiter
     gen_nodelim = {
         'bitsrep' : gen_bitsrep,
+        'bitsflip': gen_bitsflip,
+        'aut': gen_autseq,
     }
 
     if name in gen_delim.keys():
@@ -339,6 +436,26 @@ def load_data(name='dyck', num_chars=100_000, final=False, char_offset=0):
     if name == 'wp-test':
         return [int(c) + char_offset for c in enwik8_bytes()[2]]
 
+    if name == 'german-train':
+        return [c + char_offset for c in bytes(load_german()[0], 'utf-8')]
+
+    if name == 'german-val':
+        return [c + char_offset for c in bytes(load_german()[1], 'utf-8')]
+
+    if name == 'german-test':
+        return [c + char_offset for c in bytes(load_german()[2], 'utf-8')]
+
+    if name == 'code-train':
+        return [c + char_offset for c in bytes(load_code()[0], 'utf-8')]
+
+    if name == 'code-val':
+        return [c + char_offset for c in bytes(load_code()[1], 'utf-8')]
+
+    if name == 'code-test':
+        return [c + char_offset for c in bytes(load_code()[2], 'utf-8')]
+
+
+    raise
 
 def gen_n(p=0.9):
 
@@ -374,7 +491,8 @@ def gen_aut(num_states=5, num_symbols=3, p=0.3, vocab=256):
 
     return aut, symbols
 
-def gen_autseq(aut=None, length=512, vocab=256):
+AUT = {0: [(0, 122), (1, 122), (2, 248), (3, 248), (4, 224)], 1: [(1, 224), (3, 224)], 2: [(3, 248)], 3: [(4, 248)], 4: [(0, 248), (2, 122), (3, 224)]}, [248, 224, 122]
+def gen_autseq(aut=AUT[0], length=512, vocab=256, str_out=True):
 
     if aut is None:
         num_states = gen_n()
@@ -397,6 +515,9 @@ def gen_autseq(aut=None, length=512, vocab=256):
             sequence.append(symbol)
 
     assert len(sequence) == length
+
+    if str_out:
+        return ''.join(chr(c) for c in sequence)
 
     return sequence
 

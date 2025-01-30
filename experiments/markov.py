@@ -1,5 +1,5 @@
 from up.util import markov, markov_context
-from up.data import load_str
+from up.data import load_str, gen_sentence2, gen_aut
 
 import fire
 
@@ -15,14 +15,24 @@ def go(name='toy', num_chars=100_000, context=False, train_windows=10_000, test_
     :return:
     """
 
+    # for _ in range(10):
+    #     print(gen_aut())
+    # exit()
+
     print(f'# {name}')
 
-    if name != 'wp':
-        train, val, test = load_str(name=name, num_chars=num_chars, printable=False), load_str(name=name, num_chars=num_chars, printable=False), \
-                       load_str(name=name, num_chars=num_chars, printable=False)
-    else:
+    if name == 'wp':
         train, val, test = load_str(name='wp-train', printable=False), load_str(name='wp-val', printable=False), \
                        load_str(name='wp-test', printable=False)
+    elif name == 'german':
+        train, val, test = load_str(name='german-train', printable=False), load_str(name='german-val', printable=False), \
+                       load_str(name='german-test', printable=False)
+    elif name == 'code':
+        train, val, test = load_str(name='code-train', printable=False), load_str(name='code-val', printable=False), \
+                       load_str(name='code-test', printable=False)
+    else:
+        train, val, test = load_str(name=name, num_chars=num_chars, printable=False), load_str(name=name, num_chars=num_chars, printable=False), \
+                       load_str(name=name, num_chars=num_chars, printable=False)
 
     print('sample')
     print(train[:120])
