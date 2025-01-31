@@ -366,7 +366,7 @@ def go(
             'aut'      : torch.tensor(load_data('aut'), dtype=torch.long),
             'toy2'     : torch.tensor(load_data('toy2'), dtype=torch.long),
             'bitsflip' : torch.tensor(load_data('bitsflip'),  dtype=torch.long),
-            'code'     : torch.tensor(load_data('code'), dtype=torch.long),
+            'code'     : torch.tensor(load_data('code-test'), dtype=torch.long),
         }
 
     else:
