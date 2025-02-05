@@ -358,6 +358,10 @@ def go(
             'bitsrep' : torch.tensor(load_data('bitsrep'), dtype=torch.long),
             'wp'      : torch.tensor(load_data('wp-val'), dtype=torch.long),
         }
+    else:
+        datasets = {
+            'wp'   : torch.tensor(load_data('wp-val'), dtype=torch.long)
+        }
 
     if eval_test:
         testsets = {
@@ -368,11 +372,9 @@ def go(
             'bitsflip' : torch.tensor(load_data('bitsflip'),  dtype=torch.long),
             'code'     : torch.tensor(load_data('code-test'), dtype=torch.long),
         }
-
     else:
-        datasets = {
-            'wp'   : torch.tensor(load_data('wp-val'), dtype=torch.long)
-        }
+        testsets = {}
+
 
     scaler = torch.cuda.amp.GradScaler()
 
