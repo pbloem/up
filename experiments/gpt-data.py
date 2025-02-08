@@ -342,4 +342,4 @@ def grad_scale(model, scale):
         parm.grad *= scale
 
 if __name__ == '__main__':
-    fire.Fire(go)
+    fire.Fire()
