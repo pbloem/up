@@ -1,5 +1,5 @@
 import up
-from up.util import tic, toc, coords, d, sample, sample_sequence, gradient_norm, remap
+from up.util import tic, toc, coords, d, sample, sample_sequence, gradient_norm, remap, repeval
 from up.data import load_data, cas, gen_autseq
 
 from up import ProgTransformerBlock
@@ -262,7 +262,7 @@ def go(
          nl_source='relu',
          nl_target='relu',
          kqnorm=False,
-         save_to=None,
+         save_to=None,                 # File to save the checkpoint to ({} is replaced by the # of iterations if included)
          depth_factor=1.0,             # Scale the depth by this amount
          freeze_blocks=8,
          unfreeze_time = 10_000,       # Number of instances to wait before unfreezing the pro
@@ -375,7 +375,6 @@ def go(
         }
     else:
         testsets = {}
-
 
     scaler = torch.cuda.amp.GradScaler()
 
@@ -715,7 +714,7 @@ def go(
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': opt.state_dict(),
                     'locals': localvars,
-                }, save_to.format(i))
+                }, f=save_to.format(i))
 
                 # torch.save(model, save_to.format(i))
                 # Save just the model. This is a bit brittle to code changes, but doesn't require us to save the
@@ -729,7 +728,7 @@ def go(
                 print(f'evaluating rep {r}')
 
                 with torch.no_grad():
-                    bits = repeval(model=model, context=context, rep=r,
+                    bits = repeval(model=model, context=context, rep=r, num_tokens=NUM_TOKENS,
                                    batch_size=valbs, nbatches=round(eval_samples/valbs))
 
                 name = f'rep-{r}'
@@ -1058,32 +1057,32 @@ def set_lr(lr, opt):
         g['initial_lr'] = lr
 
 
-def repeval(model, context:int, rep:int, batch_size:int, nbatches :int):
-    """
-    Evaluate on repeated random sequence of length `rep`.
-    :return:
-    """
-    bits = 0.0
-    tokens = 0.0
-
-    for i in range(nbatches):
-
-        chars = torch.randint(low=0, high=NUM_TOKENS, size=(batch_size, rep), device=d())
-        nrep = int(math.ceil(context / rep))  # how many repeats
-        chars = chars.tile((1, nrep))[:, :context]
-
-        input  = chars[:, :-1]
-        target = chars[:, 1:]
-
-        output = model(input)
-
-        batch_nats = F.cross_entropy(output.permute(0, 2, 1), target, reduction='none')
-        batch_bits = batch_nats * LOG2E
-
-        bits += batch_bits.sum().item()
-        tokens += batch_bits.numel()
-
-    return bits/tokens
+# def repeval(model, context:int, rep:int, batch_size:int, nbatches :int):
+#     """
+#     Evaluate on repeated random sequence of length `rep`.
+#     :return:
+#     """
+#     bits = 0.0
+#     tokens = 0.0
+#
+#     for i in range(nbatches):
+#
+#         chars = torch.randint(low=0, high=NUM_TOKENS, size=(batch_size, rep), device=d())
+#         nrep = int(math.ceil(context / rep))  # how many repeats
+#         chars = chars.tile((1, nrep))[:, :context]
+#
+#         input  = chars[:, :-1]
+#         target = chars[:, 1:]
+#
+#         output = model(input)
+#
+#         batch_nats = F.cross_entropy(output.permute(0, 2, 1), target, reduction='none')
+#         batch_bits = batch_nats * LOG2E
+#
+#         bits += batch_bits.sum().item()
+#         tokens += batch_bits.numel()
+#
+#     return bits/tokens
 
 def cycle(tensor):
     return torch.cat((tensor[:, 1:], tensor[:, :1]), dim=1)

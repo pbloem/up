@@ -7,6 +7,13 @@ from ..util import here
 
 import numpy as np
 
+import torch, math
+from torch import nn
+import torch.nn.functional as F
+
+LOG2E = math.log2(math.e)
+LOGE2 = math.log(2.0)
+
 IMDB_URL = 'http://dlvu.github.io/data/imdb.{}.pkl.gz'
 IMDB_FILE = 'imdb.{}.pkl.gz'
 
@@ -520,6 +527,33 @@ def gen_autseq(aut=AUT[0], length=512, vocab=256, str_out=True):
         return ''.join(chr(c) for c in sequence)
 
     return sequence
+
+def repeval(model, context:int, rep:int, batch_size:int, nbatches :int, num_tokens=256):
+    """
+    Evaluate on repeated random sequence of length `rep`.
+    :return:
+    """
+    bits = 0.0
+    tokens = 0.0
+
+    for i in range(nbatches):
+
+        chars = torch.randint(low=0, high=num_tokens, size=(batch_size, rep), device=d())
+        nrep = int(math.ceil(context / rep))  # how many repeats
+        chars = chars.tile((1, nrep))[:, :context]
+
+        input  = chars[:, :-1]
+        target = chars[:, 1:]
+
+        output = model(input)
+
+        batch_nats = F.cross_entropy(output.permute(0, 2, 1), target, reduction='none')
+        batch_bits = batch_nats * LOG2E
+
+        bits += batch_bits.sum().item()
+        tokens += batch_bits.numel()
+
+    return bits/tokens
 
 if __name__ == '__main__':
     print(''.join(str(i) for i in gen_autseq(vocab=10)))
