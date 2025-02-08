@@ -19,9 +19,8 @@ from tqdm import trange
 from collections import Counter
 
 """
-Experiment 1: We train a GPT-style transformer on the Hutter prize data (100MB of wikpidia text), and test the influence
+Experiment 1: We train a GPT-style transformer on the Hutter prize data (100MB of wikipedia text), and test the influence
  of universal pretraining.
-
 """
 
 NUM_TOKENS = 256
@@ -342,10 +341,12 @@ def go(
     source_mask = dsamp(source_mask)
 
     wdname = name
+    localvars = locals() # These are basically all relevant hyperparams
+
     wd = wandb.init(
         name=name,
         project=project,
-        config=locals(),
+        config=localvars,
         mode= 'disabled' if debug else 'online'
     )
 
@@ -675,7 +676,7 @@ def go(
     results = { # All relevant results, to be saved as a json file after each eval.
         'vals' : {},
         'tests' : {},
-        'locals' : locals()
+        'locals' : localvars
     }
 
     for name in list(datasets.keys()) + [f'rep-{r}' for r in REPS]:
@@ -710,12 +711,13 @@ def go(
 
             if save_to is not None:
                 print(f'Saving model at {i} instances.')
-                # torch.save({
-                #     'model_state_dict': model.state_dict(),
-                #     'optimizer_state_dict': opt.state_dict(),
-                # }, save_to.format(i))
+                torch.save({
+                    'model_state_dict': model.state_dict(),
+                    'optimizer_state_dict': opt.state_dict(),
+                    'locals': localvars,
+                }, save_to.format(i))
 
-                torch.save(model, save_to.format(i))
+                # torch.save(model, save_to.format(i))
                 # Save just the model. This is a bit brittle to code changes, but doesn't require us to save the
                 # hyperparams manually
 
