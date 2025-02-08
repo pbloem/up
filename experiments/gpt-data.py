@@ -257,7 +257,7 @@ def go(checkpoint,
             loss = (rloss / source.size(1))
 
         scaler.scale(loss).backward()
-        accumulated += input.size(0)
+        accumulated += source.size(0)
 
         if accumulated >= mbraw: # perform a step
             scaler.unscale_(opt)
