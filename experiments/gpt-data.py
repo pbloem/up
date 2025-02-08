@@ -26,7 +26,7 @@ NUM_TOKENS = 256
 LOG2E = math.log2(math.e)
 LOGE2 = math.log(2.0)
 REPS = [1, 3, 10] # rep evaluation
-LOGLAYERS = [1, 18, 22],
+LOGLAYERS = [1, 18, 22]
 
 def nl(name : str):
     if name == 'relu':
@@ -299,7 +299,6 @@ def go(checkpoint,
 
         if hp['freeze_blocks'] >  0:
             for il in LOGLAYERS:
-                print(il, hp['depth'])
                 if il < hp['depth'] and type(model.tblocks[il]) is up.ProgTransformerBlock:
                     wandb.log({
                         f'sig(a) (layer {il})': model.tblocks[il].a.item()
