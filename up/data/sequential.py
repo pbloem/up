@@ -538,7 +538,7 @@ def repeval(model, context:int, rep:int, batch_size:int, nbatches :int, num_toke
 
     for i in range(nbatches):
 
-        chars = torch.randint(low=0, high=num_tokens, size=(batch_size, rep), device=d())
+        chars = torch.randint(low=0, high=num_tokens, size=(batch_size, rep), device='cpu' if torch.cuda.is_available() else 'cuda')
         nrep = int(math.ceil(context / rep))  # how many repeats
         chars = chars.tile((1, nrep))[:, :context]
 
