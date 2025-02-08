@@ -1,6 +1,6 @@
 import up
-from up.util import tic, toc, coords, d, sample, sample_sequence, gradient_norm, remap, repeval
-from up.data import load_data, cas, gen_autseq
+from up.util import tic, toc, coords, d, sample, sample_sequence, gradient_norm, remap
+from up.data import load_data, cas, gen_autseq, repeval
 
 from up import ProgTransformerBlock
 
