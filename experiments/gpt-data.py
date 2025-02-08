@@ -299,6 +299,7 @@ def go(checkpoint,
 
         if hp['freeze_blocks'] >  0:
             for il in LOGLAYERS:
+                print(il, hp['depth'])
                 if il < hp['depth'] and type(model.tblocks[il]) is up.ProgTransformerBlock:
                     wandb.log({
                         f'sig(a) (layer {il})': model.tblocks[il].a.item()
