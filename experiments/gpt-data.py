@@ -252,7 +252,7 @@ def go(checkpoint,
 
         with torch.cuda.amp.autocast():
             output = model(source)
-            rloss = F.cross_entropy(output.transpose(2, 1), target, reduction=sum)
+            rloss = F.cross_entropy(output.transpose(2, 1), target, reduction='sum')
 
             loss = (rloss / source.size(1))
 
