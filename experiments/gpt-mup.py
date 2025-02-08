@@ -719,6 +719,7 @@ def go(
                 # torch.save(model, save_to.format(i))
                 # Save just the model. This is a bit brittle to code changes, but doesn't require us to save the
                 # hyperparams manually
+            print('Model checkpoint saved', i)
 
         ### Evaluate
         if instances_seen - last_eval > eval_every and not skip_eval:
