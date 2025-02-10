@@ -49,7 +49,7 @@ def nl(name : str):
 
 def go(checkpoint,
          target_data='wp-train', # Which target dataset to fintune on
-         lr=3e-4,
+         lr=1e-4,
          num_batches=600_000,
          wdname='data',
          wandb_project='up-data',
@@ -70,6 +70,7 @@ def go(checkpoint,
          baseline=False, # If true, use the random initialization of the model rather than the saved parms
          skip_eval=False,  # Whether to skip the evaluation
          eval_batch_mult=2.0,  # How much bigger the eval batches can be than the training batches
+         train_prop=1.0, # Proportion of the training data to use
        ):
     """
     Load a UP checkpoint and train
@@ -111,7 +112,7 @@ def go(checkpoint,
             'dyck' : torch.tensor(load_data('dyck'), dtype=torch.long),
             'ndfa' : torch.tensor(load_data('ndfa'), dtype=torch.long),
             'toy'  : torch.tensor(load_data('toy'),  dtype=torch.long),
-            'bits' : torch.tensor(load_data('bits'), dtype=torch.long),
+            'bitsrep' : torch.tensor(load_data('bits'), dtype=torch.long),
             'wp'   : torch.tensor(load_data('wp-val'), dtype=torch.long),
         }
     else:
@@ -156,6 +157,13 @@ def go(checkpoint,
     # Fine-tuning
     print('Start data-training')
     traindata = torch.tensor(up.data.load_data(target_data), device='cpu')
+
+    if train_prop < 1.0:
+        # Train only on a small percentage of the data
+
+        newsize = int(round(traindata.size(0) * train_prop))
+        traindata = traindata[:newsize]
+
 
     if warmup > 0:
         # warmup = warmup / accumulate

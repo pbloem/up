@@ -241,7 +241,7 @@ def go(
          eval_ood=True,               # Whether to evaluate on OOD datasets
          name=None,                   # WandB name
          eval_batch_mult=2.0,         # How much bigger the eval batches can be than the training batches
-         cp_every = 500_000,          # Save a checkpoint for the model every n instances.
+         cp_every = 4_000_000,        # Save a checkpoint for the model every n instances.
          dp = False,                  # Use data-parallel (multi GPU)
          mbwarmup = 100_000,          # Accumulation warmup (in instances)
          mb_min = 16,                 # Minimum microbatch size to start warming up from.
@@ -702,11 +702,12 @@ def go(
     instances_seen = 0
     last_eval = float('-inf')
     last_unfrozen = freeze_blocks - 1
+    last_cp = 0
 
     print('Start pre-training')
     for i in (bar := trange(batches)):
 
-        if cp_every > 0 and i > 0 and i % cp_every == 0:
+        if cp_every > 0 and i > 0 and (instances_seen - last_cp) > cp_every:
 
             if save_to is not None:
                 print(f'Saving model at {i} instances.')
@@ -720,6 +721,7 @@ def go(
                 # Save just the model. This is a bit brittle to code changes, but doesn't require us to save the
                 # hyperparams manually
             print('Model checkpoint saved', i)
+            last_cp = i
 
         ### Evaluate
         if instances_seen - last_eval > eval_every and not skip_eval:
