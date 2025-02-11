@@ -710,18 +710,18 @@ def go(
         if cp_every > 0 and i > 0 and (instances_seen - last_cp) > cp_every:
 
             if save_to is not None:
-                print(f'Saving model at {i} instances.')
+                print(f'Saving model at {i} batches. Filename: {save_to.format(instances_seen)}')
                 torch.save({
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': opt.state_dict(),
                     'locals': localvars,
-                }, f=save_to.format(i))
+                }, f=save_to.format(instances_seen))
 
                 # torch.save(model, save_to.format(i))
                 # Save just the model. This is a bit brittle to code changes, but doesn't require us to save the
                 # hyperparams manually
             print('Model checkpoint saved', i)
-            last_cp = i
+            last_cp = instances_seen
 
         ### Evaluate
         if instances_seen - last_eval > eval_every and not skip_eval:
