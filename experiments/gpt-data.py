@@ -48,7 +48,7 @@ def nl(name : str):
     raise Exception(f'Nonlinearity {name} not recognized.')
 
 def go(checkpoint,
-         target_data='wp-train', # Which target dataset to fintune on
+         target_data='wp-train', # Which target dataset to finetune on
          lr=1e-4,
          num_batches=600_000,
          wdname='data',
@@ -60,8 +60,6 @@ def go(checkpoint,
          eval_every=5_000,
          print_every=500_000,
          gc=1.0,
-         microbatch_size=52,   # microbatch size
-         macrobatch_size=256,  # macrobatch size
          mbwarmup = 100_000,   # Accumulation warmup (in instances)
          mb_min = 16,          # Minimum microbatch size to start warming up from.
          mb_start = 100_000,   # Number of instances to wait before starting the warmup
@@ -78,6 +76,9 @@ def go(checkpoint,
     cp = torch.load(checkpoint, map_location=None if torch.cuda.is_available() else torch.device('cpu'))
 
     hp = cp['locals'] # hyperparams
+
+    microbatch_size = hp['target_microbatch_size']
+    macrobatch_size = hp['macrobatch_size']
 
     localvars = locals()
     wd = wandb.init(
@@ -103,6 +104,7 @@ def go(checkpoint,
     if not baseline:
         model.load_state_dict(cp['model_state_dict'])
         opt  .load_state_dict(cp['optimizer_state_dict'])
+        # NB: State dict includes the lerning rate and weight decay so they are taken from the checkpoint, NOT the command line parms.
         print('Pretraining run, loaded model/opt state dict.')
     # -- We reuse the optimizer, but re-warmup the learning rate.
 
