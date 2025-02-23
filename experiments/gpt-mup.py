@@ -715,6 +715,7 @@ def go(
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': opt.state_dict(),
                     'locals': localvars,
+                    'misc' : {'instances_seen' : instances_seen, 'last_cp' : last_cp, 'last_eval'},
                 }, f=save_to.format(instances_seen))
 
                 # torch.save(model, save_to.format(i))
@@ -879,17 +880,40 @@ def go(
 
         bar.set_postfix({'loss': f'{rloss.item():.02}'})
 
-        if mbwarmup > 0 and mbraw < macrobatch_size and instances_seen > mb_start:
-            mbraw += mbdelta * batch.size(0)
+        # Set accumulation target
+        if instances_seen <= mb_start:
+            mb_raw = mb_min
 
+        elif mb_start <= instances_seen < mbwarmup + mb_start:
+            prop = (instances_seen - mb_start) / (mbwarmup - mb_start)
+            mb_raw = mb_min + (macrobatch_size - mb_min) * prop
+        else:
+            assert instances_seen >= mbwarmup + mb_start
+            mb_raw = macrobatch_size
+
+        # -- The old way. The above is equivalent, but works better with checkpointing
+        # if mbwarmup > 0 and mbraw < macrobatch_size and instances_seen > mb_start:
+        #     mbraw += mbdelta * batch.size(0)
+
+        # Set LR
         if warmup > 0 and instances_seen <= warmup:
             for g in opt.param_groups:
-                if g['lr'] < g['max_lr']:
-                    g['lr'] += g['lr_delta'] * batch.size(0)
+                 if g['lr'] < g['max_lr']:
+                     g['lr'] = g['lr_delta'] * instances_seen
+        else:
+            if cooldown > 0:
+                since_wu = instances_seen - warmup
+                for g in opt.param_groups:
+                    g['lr'] = g['max_lr'] * cooldown_rate ** since_wu
 
-        if cooldown > 0 and instances_seen > warmup:
-            for g in opt.param_groups:
-                g['lr'] *= cooldown_rate ** batch.size(0)
+        # -- The old way. The above is equivalent, but works better with checkpointing
+        # if warmup > 0 and instances_seen <= warmup:
+        #     for g in opt.param_groups:
+        #         if g['lr'] < g['max_lr']:
+        #             g['lr'] += g['lr_delta'] * batch.size(0)
+        # if cooldown > 0 and instances_seen > warmup:
+        #     for g in opt.param_groups:
+        #         g['lr'] *= cooldown_rate ** batch.size(0)
 
         if i % print_every == 0:
 
