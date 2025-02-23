@@ -102,18 +102,36 @@ def go(checkpoint,
     opt = model.mup(base_lr=lr, width0=hp['width0'], factor=hp['init_factor'], optcls=torch.optim.AdamW, weight_decay=hp['weight_decay'])
     print('MUP-initialized model.')
 
+    if baseline:
+        if warmup > 0:
+            for g in opt.param_groups:
+                g['max_lr'] = g['lr']
+                g['lr_delta'] = g['lr'] / warmup
+
+                g['lr'] = 0.0
+
     if not baseline:
         model.load_state_dict(cp['model_state_dict'])
         opt  .load_state_dict(cp['optimizer_state_dict'])
         # NB: State dict includes the learning rate and weight decay so they are taken from the checkpoint, NOT the command line parms.
+
+        print('optimizer setup (just after loading)')
+        for g in opt.param_groups:
+            print(f"   {g['max_lr']=} {g['lr']=} {g['lr_delta']=} {warmup=} ")
+
+
+        # -- We reuse the optimizer with its max LR, but re-warmup the learning rate.
+        if warmup > 0:
+            for g in opt.param_groups:
+                g['lr_delta'] = g['max_lr'] / warmup
+                g['lr'] = 0.0
+
         print('Pretraining run, loaded model/opt state dict.')
-    # -- We reuse the optimizer, but re-warmup the learning rate.
+
 
     print('optimizer setup')
     for g in opt.param_groups:
-        print(f"{g['max_lr']=} {g['lr']=} {g['lr_delta']=} {warmup=} ")
-
-    exit()
+        print(f"   {g['max_lr']=} {g['lr']=} {g['lr_delta']=} {warmup=} ")
 
     if eval_ood:
         datasets = {
@@ -172,15 +190,6 @@ def go(checkpoint,
 
         newsize = int(round(traindata.size(0) * train_prop))
         traindata = traindata[:newsize]
-
-    if warmup > 0:
-        # warmup = warmup / accumulate
-        # sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
-        for g in opt.param_groups:
-            g['max_lr'] = g['lr']
-            g['lr_delta'] = g['lr'] / warmup
-
-            g['lr'] = 0.0
 
     cooldown_rate = 0.5 ** (1/cooldown)
     # -- The cooldown rate is given in the number of instances to halve the learning rate over. This is the resulting
