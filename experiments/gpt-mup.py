@@ -263,9 +263,10 @@ def go(
          nl_target='relu',
          kqnorm=False,
          save_to=None,                 # File to save the checkpoint to ({} is replaced by the # of iterations if included)
+         load_from=None,               # File to load the checkpoint from. Continues training from saved point.
          depth_factor=1.0,             # Scale the depth by this amount
          freeze_blocks=8,
-         unfreeze_time = 10_000,       # Number of instances to wait before unfreezing the pro
+         unfreeze_time = 10_000,       # Number of instances to wait before unfreezing the next block
          loglayers = [1,18,22],
          count_flops = False,
          idmask=True,                  # Whether to apply the id mask trick (replacing some output values by the input) --
@@ -397,7 +398,7 @@ def go(
     else:
         opt = torch.optim.AdamW(lr=base_lr, params=model.parameters(), weight_decay=weight_decay)
 
-    if warmup > 0:
+    if warmup > 0 and load_from is None:
         # warmup = warmup / accumulate
         # sch = torch.optim.lr_scheduler.LambdaLR(opt, lambda i: min(i / (warmup / model_batch_size), 1.0))
         for g in opt.param_groups:
@@ -410,6 +411,18 @@ def go(
     # -- The cooldown rate is given in the number of instances to halve the learning rate over. This is the resulting
     #    multiplier per instance.
     last_cooldown = warmup
+
+    if load_from is not None:
+        # Load a checkpoint and continue from there
+        cp = torch.load(load_from, map_location=None if torch.cuda.is_available() else torch.device('cpu'))
+
+        model.load_state_dict(cp['model_state_dict'])
+        opt  .load_state_dict(cp['optimizer_state_dict'])
+        # NB: State dict includes the learning rate and weight decay so they are taken from the checkpoint, NOT the command line parms.
+        misc = cp['misc']
+
+        print(f'Model checkpoint {load_from} loaded')
+        print(misc)
 
     print(opt)
 
@@ -699,10 +712,16 @@ def go(
     else:
         mbraw = macrobatch_size
 
-    instances_seen = 0
-    last_eval = float('-inf')
-    last_unfrozen = freeze_blocks - 1
-    last_cp = 0
+    if load_from is None:
+        instances_seen = 0
+        last_eval = float('-inf')
+        last_unfrozen = freeze_blocks - 1
+        last_cp = 0
+    else:
+        instances_seen = misc['instances_seen']
+        last_eval      = misc['last_eval']
+        last_unfrozen  = misc['last_unfrozen']
+        last_cp        = misc['last_cp']
 
     print('Start pre-training')
     for i in (bar := trange(batches)):
@@ -715,12 +734,9 @@ def go(
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': opt.state_dict(),
                     'locals': localvars,
-                    'misc' : {'instances_seen' : instances_seen, 'last_cp' : last_cp, 'last_eval' : last_eval},
+                    'misc' : {'instances_seen' : instances_seen, 'last_cp' : last_cp, 'last_eval' : last_eval, 'last_unfrozen' : last_unfrozen},
                 }, f=save_to.format(instances_seen))
 
-                # torch.save(model, save_to.format(i))
-                # Save just the model. This is a bit brittle to code changes, but doesn't require us to save the
-                # hyperparams manually
             print('Model checkpoint saved', i)
             last_cp = instances_seen
 
