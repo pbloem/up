@@ -715,7 +715,7 @@ def go(
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': opt.state_dict(),
                     'locals': localvars,
-                    'misc' : {'instances_seen' : instances_seen, 'last_cp' : last_cp, 'last_eval'},
+                    'misc' : {'instances_seen' : instances_seen, 'last_cp' : last_cp, 'last_eval' : last_eval},
                 }, f=save_to.format(instances_seen))
 
                 # torch.save(model, save_to.format(i))
