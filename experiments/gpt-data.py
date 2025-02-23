@@ -49,7 +49,8 @@ def nl(name : str):
 
 def go(checkpoint,
          target_data='wp-train', # Which target dataset to finetune on
-         lr=1e-4,
+         lr=None,
+         lr_mult=1.0, # Multiplier for the learning rate
          num_batches=600_000,
          wdname='data',
          wandb_project='up-data',
@@ -104,9 +105,15 @@ def go(checkpoint,
     if not baseline:
         model.load_state_dict(cp['model_state_dict'])
         opt  .load_state_dict(cp['optimizer_state_dict'])
-        # NB: State dict includes the lerning rate and weight decay so they are taken from the checkpoint, NOT the command line parms.
+        # NB: State dict includes the learning rate and weight decay so they are taken from the checkpoint, NOT the command line parms.
         print('Pretraining run, loaded model/opt state dict.')
     # -- We reuse the optimizer, but re-warmup the learning rate.
+
+    print('optimizer setup')
+    for g in opt.param_groups:
+        print(f"{g['max_lr']=} {g['lr']=} {g['lr_delta']=} {warmup=} ")
+
+    exit()
 
     if eval_ood:
         datasets = {
@@ -165,7 +172,6 @@ def go(checkpoint,
 
         newsize = int(round(traindata.size(0) * train_prop))
         traindata = traindata[:newsize]
-
 
     if warmup > 0:
         # warmup = warmup / accumulate
