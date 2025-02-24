@@ -901,7 +901,7 @@ def go(
             mbraw = mb_min
 
         elif mb_start <= instances_seen < mbwarmup + mb_start:
-            prop = (instances_seen - mb_start) / (mbwarmup - mb_start)
+            prop = (instances_seen - mb_start) / mbwarmup
             mbraw = mb_min + (macrobatch_size - mb_min) * prop
         else:
             assert instances_seen >= mbwarmup + mb_start
