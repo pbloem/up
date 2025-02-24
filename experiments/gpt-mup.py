@@ -899,13 +899,18 @@ def go(
         # Set accumulation target
         if instances_seen <= mb_start:
             mb_raw = mb_min
+            print('before', mb_raw)
 
         elif mb_start <= instances_seen < mbwarmup + mb_start:
             prop = (instances_seen - mb_start) / (mbwarmup - mb_start)
             mb_raw = mb_min + (macrobatch_size - mb_min) * prop
+
+            print('prop', prop)
         else:
             assert instances_seen >= mbwarmup + mb_start
             mb_raw = macrobatch_size
+
+        print('mb_raw', mb_raw)
 
         # -- The old way. The above is equivalent, but works better with checkpointing
         # if mbwarmup > 0 and mbraw < macrobatch_size and instances_seen > mb_start:
