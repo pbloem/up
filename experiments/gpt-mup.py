@@ -726,6 +726,8 @@ def go(
     print('Start pre-training')
     for i in (bar := trange(batches)):
 
+        print('mbraw start', mb_raw)
+
         if cp_every > 0 and i > 0 and (instances_seen - last_cp) > cp_every:
 
             if save_to is not None:
@@ -805,11 +807,14 @@ def go(
 
         tic()
 
+
+        print('mbraw bs', mb_raw)
         bs = min(int(round(mbraw)), target_microbatch_size)
         # If the current macrobatch size is smaller than the microbatch size, we go with the smaller value
         # (i.e. we leave memory unused).
 
         batch = generator(bs) # Sample a training batch
+        print('mbraw after gen', mb_raw)
 
         sampletime = toc()
 
