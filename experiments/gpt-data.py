@@ -50,7 +50,7 @@ def nl(name : str):
 def go(checkpoint,
          target_data='wp-train', # Which target dataset to finetune on
          lr=None,
-         lr_mult=1.0, # Multiplier for the learning rate
+         lr_mult=1.0, # Multiplier for the learning rate, only applies to non-baseline model
          num_batches=600_000,
          wdname='data',
          wandb_project='up-data',
