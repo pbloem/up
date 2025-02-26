@@ -123,11 +123,10 @@ def go(checkpoint,
         # -- We reuse the optimizer with its max LR, but re-warmup the learning rate.
         if warmup > 0:
             for g in opt.param_groups:
-                g['lr_delta'] = g['max_lr'] / warmup
+                g['lr_delta'] = (g['max_lr'] * lr_mult) / warmup
                 g['lr'] = 0.0
 
         print('Pretraining run, loaded model/opt state dict.')
-
 
     print('optimizer setup')
     for g in opt.param_groups:
