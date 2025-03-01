@@ -62,6 +62,7 @@ MARKOV = {
     'bitsrep': [1.000061690176759, 1.0001037284531082, 1.0001749039272738, 0.6483094648040643, 0.6241204968147399, 0.6224601673202647],
     'bitsflip': [1.000074154717487, 0.9953309358413249, 0.995262314805013, 0.986348637183013, 0.9858847570969156, 0.9711596495840878],
     'code': [5.282956440772358, 4.287111403898651, 3.3423394276797116, 3.34721634546682, 3.685955590714477, 3.990117372241228],
+    'linux': [5.473327986608948, 4.225614158941083, 3.277661839305426, 2.630683577809595, 2.540130443329754, 2.764384432742916]
 }
 
 """
@@ -80,6 +81,7 @@ MARKOV_CTX = {
     'bitsrep': [1.0057, 1.0127, 1.0215, 0.6922, 0.6957, 0.7379],  # 0.62
     'bitsflip': [1.0065, 1.0092, 1.0180, 1.0251, 1.0579, 1.0995], # 1.0 / 0.97
     'code': [5.2035, 4.4917, 4.4966, 4.9268, 5.3235, 5.5718],     # 4.5
+    'linux': [5.1623, 4.3409, 4.4943, 5.0001, 5.4398, 5.7729],    # 4.5
 }
 
 def load_imdb(final=False, val=5000, seed=0, voc=None, char=False):
@@ -198,6 +200,23 @@ def load_german():
         ff = file.read()
 
     train, val, test = ff[:GERMAN_SPLIT[0]], ff[GERMAN_SPLIT[0]:GERMAN_SPLIT[0]+GERMAN_SPLIT[1]], ff[GERMAN_SPLIT[0]+GERMAN_SPLIT[1]:]
+
+    return train, val, test
+
+
+LINUX_SPLIT = 161_326_322, 10_000_000 # train and val size, remainder is test
+def load_linux():
+
+    with gzip.open(here('./up/data/linux.txt.gz'), 'r') as file:
+        lin = file.read()
+    lin = lin.decode('utf-8', errors='replace')
+    lin = re.sub('\s+', ' ', lin)
+
+    # n = 10000000
+    # print(len(lin), lin[n:n+512])
+    # exit()
+
+    train, val, test = lin[:LINUX_SPLIT[0]], lin[LINUX_SPLIT[0]:LINUX_SPLIT[0]+LINUX_SPLIT[1]], lin[LINUX_SPLIT[0]+LINUX_SPLIT[1]:]
 
     return train, val, test
 
@@ -461,8 +480,16 @@ def load_data(name='dyck', num_chars=100_000, final=False, char_offset=0):
     if name == 'code-test':
         return [c + char_offset for c in bytes(load_code()[2], 'utf-8')]
 
+    if name == 'linux-train':
+        return [c + char_offset for c in bytes(load_linux()[0], 'utf-8')]
 
-    raise
+    if name == 'linux-val':
+        return [c + char_offset for c in bytes(load_linux()[1], 'utf-8')]
+
+    if name == 'linux-test':
+        return [c + char_offset for c in bytes(load_linux()[2], 'utf-8')]
+
+    raise Exception(f'Dataset name {name} not recognized.')
 
 def gen_n(p=0.9):
 
@@ -556,4 +583,6 @@ def repeval(model, context:int, rep:int, batch_size:int, nbatches :int, num_toke
     return bits/tokens
 
 if __name__ == '__main__':
-    print(''.join(str(i) for i in gen_autseq(vocab=10)))
+
+    load_linux()
+    # print(''.join(str(i) for i in gen_autseq(vocab=10)))

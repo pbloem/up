@@ -15,10 +15,6 @@ def go(name='toy', num_chars=100_000, context=False, train_windows=10_000, test_
     :return:
     """
 
-    # for _ in range(10):
-    #     print(gen_aut())
-    # exit()
-
     print(f'# {name}')
 
     if name == 'wp':
@@ -30,6 +26,9 @@ def go(name='toy', num_chars=100_000, context=False, train_windows=10_000, test_
     elif name == 'code':
         train, val, test = load_str(name='code-train', printable=False), load_str(name='code-val', printable=False), \
                        load_str(name='code-test', printable=False)
+    elif name == 'linux':
+        train, val, test = load_str(name='linux-train', printable=False), load_str(name='linux-val', printable=False), \
+                       load_str(name='linux-test', printable=False)
     else:
         train, val, test = load_str(name=name, num_chars=num_chars, printable=False), load_str(name=name, num_chars=num_chars, printable=False), \
                        load_str(name=name, num_chars=num_chars, printable=False)

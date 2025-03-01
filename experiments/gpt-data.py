@@ -69,16 +69,23 @@ def go(checkpoint,
          baseline=False, # If true, use the random initialization of the model rather than the saved parms
          skip_eval=False,  # Whether to skip the evaluation
          eval_batch_mult=2.0,  # How much bigger the eval batches can be than the training batches
-         train_prop=1.0, # Proportion of the training data to use
+         train_prop=1.0,  # Proportion of the training data to use
+         context=None,    # override for the context
+         bs=None,         # override for the batch size
+         reset_opt=False, # reset the optimizer, rather than reusing it.
        ):
     """
     Load a UP checkpoint and train
     """
+    if context is not None:
+        assert baseline # for now
+
     cp = torch.load(checkpoint, map_location=None if torch.cuda.is_available() else torch.device('cpu'))
 
     hp = cp['locals'] # hyperparams
 
-    microbatch_size = hp['target_microbatch_size']
+    microbatch_size = bs if bs is not None else hp['target_microbatch_size']
+    ctx = context if context is not None else hp['context']
     macrobatch_size = hp['macrobatch_size']
 
     localvars = locals()
@@ -90,11 +97,12 @@ def go(checkpoint,
     )
 
     # Target for training
-    model = up.GTransformer(emb=hp['width'], heads=hp['heads'], depth=hp['depth'], seq_length=hp['context'], nl=nl(hp['nl_target']),
+    model = up.GTransformer(emb=hp['width'], heads=hp['heads'], depth=hp['depth'], context=ctx, nl=nl(hp['nl_target']),
                             num_tokens=NUM_TOKENS, nosqrt=not hp['sqrt_attn_scale'], output_mult=hp['out_factor'], kqnorm=hp['kqnorm'],
                             attn_factor=hp['attn_factor'], num_progblocks=max(hp['depth'] - hp['freeze_blocks'], 0))
     # -- Note: the first block of layers consists of regular blocks, the rest are frozen blocks (these are progressively unfrozen)
     #    as training progresses.
+    # -- Note: we have to load the original cpontext size first and then extend, or the state-dict won't match
 
     if torch.cuda.is_available():
         model.cuda()
@@ -112,21 +120,25 @@ def go(checkpoint,
 
     if not baseline:
         model.load_state_dict(cp['model_state_dict'])
-        opt  .load_state_dict(cp['optimizer_state_dict'])
-        # NB: State dict includes the learning rate and weight decay so they are taken from the checkpoint, NOT the command line parms.
+        if not reset_opt:
+            opt.load_state_dict(cp['optimizer_state_dict'])
+            # NB: State dict includes the learning rate and weight decay so they are taken from the checkpoint, NOT the command line parms.
 
         print('optimizer setup (just after loading)')
         for g in opt.param_groups:
             print(f"   {g['max_lr']=} {g['lr']=} {g['lr_delta']=} {warmup=} ")
 
-
-        # -- We reuse the optimizer with its max LR, but re-warmup the learning rate.
         if warmup > 0:
             for g in opt.param_groups:
                 g['lr_delta'] = (g['max_lr'] * lr_mult) / warmup
                 g['lr'] = 0.0
 
         print('Pretraining run, loaded model/opt state dict.')
+
+    if context is not None:
+        raise
+        # - Replace the embedding layer
+        # - Reset the optimizer (copy paste some code from model.mup())
 
     print('optimizer setup')
     for g in opt.param_groups:
