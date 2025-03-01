@@ -97,7 +97,7 @@ def go(checkpoint,
     )
 
     # Target for training
-    model = up.GTransformer(emb=hp['width'], heads=hp['heads'], depth=hp['depth'], context=ctx, nl=nl(hp['nl_target']),
+    model = up.GTransformer(emb=hp['width'], heads=hp['heads'], depth=hp['depth'], seq_length=ctx, nl=nl(hp['nl_target']),
                             num_tokens=NUM_TOKENS, nosqrt=not hp['sqrt_attn_scale'], output_mult=hp['out_factor'], kqnorm=hp['kqnorm'],
                             attn_factor=hp['attn_factor'], num_progblocks=max(hp['depth'] - hp['freeze_blocks'], 0))
     # -- Note: the first block of layers consists of regular blocks, the rest are frozen blocks (these are progressively unfrozen)
