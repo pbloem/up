@@ -724,6 +724,67 @@ class GTransformer(nn.Module):
                 {'params': scaleparms, 'lr': base_lr / widthscale},
             ], lr=base_lr, weight_decay=weight_decay)
 
+    def mup_opt(self, base_lr, width0, optcls=torch.optim.Adam, factor=1, factor_out=1, weight_decay=0.0):
+        """
+        Makes a new optimizer, according to the mup logic, without changing the parameters. Useful when finetuning an
+        existing model that was originally mup-initialized.
+
+        :param base_lr: Learning rate at `width = width0`. This is assumed to apply uniformly to all parameters.
+        :param width0:
+        :param optcls: Class for the optimizer to return (note that the current scaling applies to Adam and some variants, but not to SGD)
+        :param factor: A multiplier for the base initialization standard deviation (this is the square root of the sigmas in the paper).
+        :param factor_out: Factor for the output init. May need to be set to width0 if trying to replicate an SP-trained
+             model
+        :return: A muP optimizer if requested, else nothing.
+        """
+
+        # Ratio between the current width and the width for which the base LR was tuned
+        widthscale = self.emb / width0
+
+        baseparms = []  # Parameters for which the base learning rate transfers directly
+        scaleparms = [] # Parameters for which the base learning rate is multiplied by 1 / widthscale
+
+        # - Input matrices token and pos embeddings. These are not scaled.
+        baseparms.extend(self.token_embedding.parameters())
+        baseparms.extend(self.pos_embedding.parameters())
+
+        # - Trf blocks
+        for block in self.tblocks:
+
+            # layer norms. Not scaled.
+            baseparms.extend(block.norm1.parameters())
+            baseparms.extend(block.norm2.parameters())
+
+            if type(block) is ProgTransformerBlock:
+                baseparms.append(block.a)
+
+            if hasattr(block.attention, 'kln'):
+                baseparms.extend(block.attention.kln.parameters())
+            if hasattr(block.attention, 'qln'):
+                baseparms.extend(block.attention.qln.parameters())
+
+            # SA weights and biases
+            for lin in (block.attention.tokeys, block.attention.toqueries, block.attention.tovalues, block.attention.unifyheads):
+                scaleparms.extend(lin.parameters())
+
+                # scaleparms.extend(block.attention.parameters())
+
+            # FF weights and biases
+            for mod in block.ff:
+                if type(mod) == nn.Linear:
+                    if mod.in_features == self.emb:
+                        scaleparms.extend(mod.parameters())
+                    else:
+                        assert mod.in_features == 4 * self.emb
+                        scaleparms.extend(mod.parameters())
+
+        scaleparms.extend(self.toprobs.parameters())
+
+        return optcls([
+            {'params': baseparms},
+            {'params': scaleparms, 'lr': base_lr / widthscale},
+        ], lr=base_lr, weight_decay=weight_decay)
+
 
 class ConditionalBlock(nn.Module):
     """
