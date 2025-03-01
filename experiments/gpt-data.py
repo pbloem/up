@@ -50,7 +50,7 @@ def nl(name : str):
 def go(checkpoint,
          target_data='wp-train', # Which target dataset to finetune on
          lr=None,
-         lr_mult=1.0, # Multiplier for the learning rate, only applies to non-baseline model
+         lr_mult=1.0, # Multiplier for the learning rate, only applies to non-baseline model, only if warmup is turned on
          num_batches=600_000,
          wdname='data',
          wandb_project='up-data',
@@ -78,7 +78,8 @@ def go(checkpoint,
     Load a UP checkpoint and train
     """
     if context is not None:
-        assert baseline # for now
+        assert baseline or reset_opt
+        # We can only extend the context window by replacing the embedding layer, which requires resetting the optimizer
 
     cp = torch.load(checkpoint, map_location=None if torch.cuda.is_available() else torch.device('cpu'))
 
@@ -97,7 +98,7 @@ def go(checkpoint,
     )
 
     # Target for training
-    model = up.GTransformer(emb=hp['width'], heads=hp['heads'], depth=hp['depth'], seq_length=ctx, nl=nl(hp['nl_target']),
+    model = up.GTransformer(emb=hp['width'], heads=hp['heads'], depth=hp['depth'], seq_length=hp['context'], nl=nl(hp['nl_target']),
                             num_tokens=NUM_TOKENS, nosqrt=not hp['sqrt_attn_scale'], output_mult=hp['out_factor'], kqnorm=hp['kqnorm'],
                             attn_factor=hp['attn_factor'], num_progblocks=max(hp['depth'] - hp['freeze_blocks'], 0))
     # -- Note: the first block of layers consists of regular blocks, the rest are frozen blocks (these are progressively unfrozen)
@@ -122,7 +123,7 @@ def go(checkpoint,
         model.load_state_dict(cp['model_state_dict'])
         if not reset_opt:
             opt.load_state_dict(cp['optimizer_state_dict'])
-            # NB: State dict includes the learning rate and weight decay so they are taken from the checkpoint, NOT the command line parms.
+            # NB: State dict includes the learning rate and weight decay, so they are taken from the checkpoint, NOT the command line parms.
 
         print('optimizer setup (just after loading)')
         for g in opt.param_groups:
@@ -136,9 +137,20 @@ def go(checkpoint,
         print('Pretraining run, loaded model/opt state dict.')
 
     if context is not None:
-        raise
-        # - Replace the embedding layer
-        # - Reset the optimizer (copy paste some code from model.mup())
+        # Replace the position embeddings
+        model.pos_embedding = nn.Embedding(embedding_dim=hp['width'], num_embeddings=context)
+        if torch.cuda.is_available():
+            model.pos_embedding.cuda()
+
+        # Create a new optimizer (using the MUP logic)
+        opt = model.mup_opt(base_lr=lr, width0=hp['width0'], factor=hp['init_factor'], optcls=torch.optim.AdamW, weight_decay=hp['weight_decay'])
+
+        # Set the warmup and lr_mult
+        if warmup > 0:
+            for g in opt.param_groups:
+                g['max_lr'] = g['lr']
+                g['lr_delta'] = (g['max_lr'] * lr_mult) / warmup
+                g['lr'] = 0.0
 
     print('optimizer setup')
     for g in opt.param_groups:
@@ -227,7 +239,7 @@ def go(checkpoint,
                 print(f'evaluating rep {r}')
 
                 with torch.no_grad():
-                    bits = repeval(model=model, context=hp['context'], rep=r, num_tokens=NUM_TOKENS,
+                    bits = repeval(model=model, context=ctx, rep=r, num_tokens=NUM_TOKENS,
                                    batch_size=valbs, nbatches=round(eval_samples/valbs))
 
                 name = f'rep-{r}'
@@ -245,7 +257,7 @@ def go(checkpoint,
                         model=model,
                         data=data,
                         nsamples=eval_samples,
-                        context=hp['context'],
+                        context=ctx,
                         batch_size=valbs,
                         model_produces_logits=True
                     )
@@ -265,7 +277,7 @@ def go(checkpoint,
                             model=model,
                             data=data,
                             nsamples=eval_samples,
-                            context=hp['context'],
+                            context=ctx,
                             batch_size=valbs,
                             model_produces_logits=True
                         )
@@ -281,7 +293,7 @@ def go(checkpoint,
                 json.dump(results, f, indent=6, default=lambda o: '<not serializable>') # the json is dumped and overwritten every eval
 
         # sample a batch from the data
-        source, target = sample_batch(traindata, hp['context'], microbatch_size)
+        source, target = sample_batch(traindata, ctx, microbatch_size)
 
         if torch.cuda.is_available():
             source, target = source.cuda(), target.cuda()
