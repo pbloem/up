@@ -110,7 +110,7 @@ def go(checkpoint,
     opt = model.mup(base_lr=lr, width0=hp['width0'], factor=hp['init_factor'], optcls=torch.optim.AdamW, weight_decay=hp['weight_decay'])
     print('MUP-initialized model.')
 
-    if baseline:
+    if baseline or reset_opt:
         if warmup > 0:
             for g in opt.param_groups:
                 g['max_lr'] = g['lr']
