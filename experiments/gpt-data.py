@@ -164,6 +164,7 @@ def go(checkpoint,
             'toy'  : torch.tensor(load_data('toy'),  dtype=torch.long),
             'bitsrep' : torch.tensor(load_data('bits'), dtype=torch.long),
             'wp'   : torch.tensor(load_data('wp-val'), dtype=torch.long),
+            'linux': torch.tensor(load_data('linux-val'), dtype=torch.long)
         }
     else:
         datasets = {
