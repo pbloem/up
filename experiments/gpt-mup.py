@@ -239,7 +239,7 @@ def go(
          mask_prob_max=0.7,
          skip_eval=False,             # Whether to skip the evaluation
          eval_ood=True,               # Whether to evaluate on OOD datasets
-         name=None,                   # WandB name
+         name=None,                   # WandB name. This is also used for the results file (which is re-loaded if a checkpoint is used)
          eval_batch_mult=2.0,         # How much bigger the eval batches can be than the training batches
          cp_every = 4_000_000,        # Save a checkpoint for the model every n instances.
          dp = False,                  # Use data-parallel (multi GPU)
@@ -263,7 +263,7 @@ def go(
          nl_target='relu',
          kqnorm=False,
          save_to=None,                 # File to save the checkpoint to ({} is replaced by the # of iterations if included)
-         load_from=None,               # File to load the checkpoint from. Continues training from saved point.
+         load_from=None,               # File to load the checkpoint from. Continues training from saved point. Results are loaded from name.json
          depth_factor=1.0,             # Scale the depth by this amount
          freeze_blocks=8,
          unfreeze_time = 10_000,       # Number of instances to wait before unfreezing the next block
@@ -385,7 +385,7 @@ def go(
     model = up.GTransformer(emb=width, heads=heads, depth=depth, seq_length=context, nl=nl(nl_target),
                             num_tokens=NUM_TOKENS, nosqrt=not sqrt_attn_scale, output_mult=out_factor, kqnorm=kqnorm,
                             attn_factor=attn_factor, num_progblocks=max(depth - freeze_blocks, 0))
-    # -- Note: the first block of layers consists of regular blocks, the rest are frozen blocks (these are progressively unfrozen)
+    # -- Note: the first block of layers consists of regular blocks, the rest are frozen blocks. These are progressively unfrozen
     #    as training progresses.
 
     if torch.cuda.is_available():
@@ -423,6 +423,13 @@ def go(
 
         print(f'Model checkpoint {load_from} loaded')
         print(misc)
+
+        # Load the results so far
+        with open(f'./{wdname}.json', 'w') as f:
+            results = json.load(f)
+    else:
+        results = None
+        misc = None
 
     print(opt)
 
@@ -685,25 +692,26 @@ def go(
         source_flops = get_flops(cmp_source, batch_size=source_microbatch_size, ctx=context, backward=False)
         print(f'target (GFLOps): {target_flops / 1e9}, source (GFLOps): {source_flops / 1e9}')
 
-    results = { # All relevant results, to be saved as a json file after each eval.
-        'vals' : {},
-        'tests' : {},
-        'locals' : localvars
-    }
-
-    for name in list(datasets.keys()) + [f'rep-{r}' for r in REPS]:
-        results['vals'][name] = {
-            'instances' : [],
-            'bits' :  [],
-            'microbatches' : [],
+    if results is None:
+        results = { # All relevant results, to be saved as a json file after each eval.
+            'vals' : {},
+            'tests' : {},
+            'locals' : localvars
         }
 
-    for name in list(testsets.keys()):
-        results['tests'][name] = {
-            'instances' : [],
-            'bits' :  [],
-            'microbatches' : [],
-        }
+        for name in list(datasets.keys()) + [f'rep-{r}' for r in REPS]:
+            results['vals'][name] = {
+                'instances' : [],
+                'bits' :  [],
+                'microbatches' : [],
+            }
+
+        for name in list(testsets.keys()):
+            results['tests'][name] = {
+                'instances' : [],
+                'bits' :  [],
+                'microbatches' : [],
+            }
 
     accumulated = 0 # nr of instances accumulated currently
     if mbwarmup > 0:
@@ -724,7 +732,13 @@ def go(
         last_cp        = misc['last_cp']
 
     print('Start pre-training')
-    for i in (bar := trange(batches)):
+
+    if  misc is None:
+        fr = 0
+    else:
+        fr = misc['last_batch']
+
+    for i in (bar := trange(fr+1,  batches)):
 
         if cp_every > 0 and i > 0 and (instances_seen - last_cp) > cp_every:
 
@@ -734,7 +748,7 @@ def go(
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': opt.state_dict(),
                     'locals': localvars,
-                    'misc' : {'instances_seen' : instances_seen, 'last_cp' : last_cp, 'last_eval' : last_eval, 'last_unfrozen' : last_unfrozen},
+                    'misc' : {'instances_seen' : instances_seen, 'last_cp' : last_cp, 'last_eval' : last_eval, 'last_unfrozen' : last_unfrozen, 'last_batch': i},
                 }, f=save_to.format(instances_seen))
 
             print('Model checkpoint saved', i)
