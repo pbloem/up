@@ -431,6 +431,9 @@ def go(
         # Load the results so far
         with open(f'./{wdname}.json', 'r') as f:
             results = json.load(f)
+
+        model.enable_layers(lambda j: j <= misc['last_unfrozen'])
+
     else:
         results = None
         misc = None
@@ -965,7 +968,6 @@ def go(
                     print(f'{instances_seen=} unfreezing blocks from {last_unfrozen+1} to {last_unfrozen + freeze_blocks}.')
 
                     model.enable_layers(lambda j : last_unfrozen + 1 <= j <= last_unfrozen + freeze_blocks)
-
                     last_unfrozen += freeze_blocks
 
         instances_seen += batch.size(0)

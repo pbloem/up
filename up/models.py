@@ -603,7 +603,6 @@ class GTransformer(nn.Module):
             ) for _ in range(num_progblocks)
         )
 
-
         self.tblocks = nn.ModuleList(modules=tblocks)
 
     def forward(self, x, z=None):
@@ -626,9 +625,7 @@ class GTransformer(nn.Module):
 
     def enable_layers(self, check):
         """
-        Enables any layers for whose index i check(i) is true. This is done by setting requires_grad (back) to True for
-        the layer norm weights. The value is kept at zero, so just after enabling, the block still computed the identity
-        function, but it can now slowly begin to change under gradient descent.
+        Enables any layers for whose index i check(i) is true.
 
         :param check:
         :return:
