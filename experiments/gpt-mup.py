@@ -416,9 +416,13 @@ def go(
         # Load a checkpoint and continue from there
         cp = torch.load(load_from, map_location=None if torch.cuda.is_available() else torch.device('cpu'))
 
-        model.load_state_dict(cp['model_state_dict'])
+        model.load_state_dict(cp[    'model_state_dict'])
         opt  .load_state_dict(cp['optimizer_state_dict'])
         # NB: State dict includes the learning rate and weight decay so they are taken from the checkpoint, NOT the command line parms.
+
+        buffer = cp['buffer']
+        # -- We store the latest state of the buffer to fully checkpoint the current state of training. Resetting the
+        #    buffer has a minor impact on the loss.
         misc = cp['misc']
 
         print(f'Model checkpoint {load_from} loaded')
@@ -430,6 +434,7 @@ def go(
     else:
         results = None
         misc = None
+        buffer = None
 
     print(opt)
 
@@ -539,8 +544,9 @@ def go(
         lstmdev = 'cuda' if ( lstmgpu and torch.cuda.is_available()) else 'cpu'
         source.to(lstmdev)
 
-        buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, 1), device=lstmdev)
-        buffer = buffer.tile((1, context))
+        if buffer is None:
+            buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, 1), device=lstmdev)
+            buffer = buffer.tile((1, context))
         #-- We init the buffer with constant sequences (i.e. those filled with a single repeating token). This ensures
         #   that the LSTM is conditioned on a simple sequence and starts by generating highly regular sequences.
 
@@ -725,18 +731,16 @@ def go(
         last_eval = float('-inf')
         last_unfrozen = freeze_blocks - 1
         last_cp = 0
+        fr = 0
+
     else:
         instances_seen = misc['instances_seen']
         last_eval      = misc['last_eval']
         last_unfrozen  = misc['last_unfrozen']
         last_cp        = misc['last_cp']
+        fr = misc['last_batch']
 
     print('Start pre-training')
-
-    if  misc is None:
-        fr = 0
-    else:
-        fr = misc['last_batch']
 
     for i in (bar := trange(fr+1,  batches)):
 
@@ -748,6 +752,7 @@ def go(
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': opt.state_dict(),
                     'locals': localvars,
+                    'buffer': buffer,
                     'misc' : {'instances_seen' : instances_seen, 'last_cp' : last_cp, 'last_eval' : last_eval, 'last_unfrozen' : last_unfrozen, 'last_batch': i},
                 }, f=save_to.format(instances_seen))
 
