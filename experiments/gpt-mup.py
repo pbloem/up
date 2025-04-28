@@ -425,7 +425,7 @@ def go(
         print(misc)
 
         # Load the results so far
-        with open(f'./{wdname}.json', 'w') as f:
+        with open(f'./{wdname}.json', 'r') as f:
             results = json.load(f)
     else:
         results = None
