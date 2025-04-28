@@ -813,6 +813,7 @@ def go(
 
             last_eval = instances_seen
             with open(f'./{wdname}.json', 'w') as f:
+                print('results', instances_seen, results)
                 json.dump(results, f, indent=6, default=lambda o: '<not serializable>') # the json is dumped and overwritten every eval
 
         ### Train
