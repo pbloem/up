@@ -416,9 +416,10 @@ def go(
         # Load a checkpoint and continue from there
         cp = torch.load(load_from, map_location=None if torch.cuda.is_available() else torch.device('cpu'))
 
-        model.load_state_dict(cp[    'model_state_dict'])
-        opt  .load_state_dict(cp['optimizer_state_dict'])
-        # NB: State dict includes the learning rate and weight decay so they are taken from the checkpoint, NOT the command line parms.
+        model .load_state_dict(cp[    'model_state_dict'])
+        opt   .load_state_dict(cp['optimizer_state_dict'])
+        scaler.load_state_dict(cp[   'scaler_state_dict'])
+        # NB: Opt state dict includes the learning rate and weight decay so they are taken from the checkpoint, NOT the command line parms.
 
         buffer = cp['buffer']
         # -- We store the latest state of the buffer to fully checkpoint the current state of training. Resetting the
@@ -539,9 +540,6 @@ def go(
         We use a buffer to minimize dependence in the samples, just as with the transformer generator.   
         """
 
-        # -- NB: This is all on the CPU. For some reason GPU LSTMs don't show the right transition
-        #    to chaos.
-
         source = up.LSTMGen(lstmemb, mask_channel=False, num_tokens=NUM_TOKENS, layers=lstmlayers)
 
         lstmdev = 'cuda' if ( lstmgpu and torch.cuda.is_available()) else 'cpu'
@@ -550,6 +548,7 @@ def go(
         if buffer is None:
             buffer = torch.randint(low=0, high=NUM_TOKENS, size=(buffer_size, 1), device=lstmdev)
             buffer = buffer.tile((1, context))
+
         #-- We init the buffer with constant sequences (i.e. those filled with a single repeating token). This ensures
         #   that the LSTM is conditioned on a simple sequence and starts by generating highly regular sequences.
 
@@ -754,6 +753,7 @@ def go(
                 torch.save({
                     'model_state_dict': model.state_dict(),
                     'optimizer_state_dict': opt.state_dict(),
+                    'scaler_state_dict': scaler.state_dict(),
                     'locals': localvars,
                     'buffer': buffer,
                     'misc' : {'instances_seen' : instances_seen, 'last_cp' : last_cp, 'last_eval' : last_eval, 'last_unfrozen' : last_unfrozen, 'last_batch': i},
