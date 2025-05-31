@@ -683,8 +683,10 @@ def go(
 
         def generator_ndfa(bs):
             batch = []
+
             for i in range(bs):
-                batch.append(gen_autseq(aut=None, length=context, vocab=NUM_TOKENS))
+                batch.append(gen_autseq(aut=None, length=context, vocab=NUM_TOKENS, str_out=False))
+
             batch = torch.tensor(batch, device=d())
 
             return batch
