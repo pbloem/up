@@ -289,6 +289,7 @@ def go(
          lstmmult=(1.0,3.5),
          lstmtemp=0.0,
          lstmseed=8,
+         lstm_noit=False,               # Ablation setting: don't refeed the structured noise to the LSTM.
          lstmreset=(50,50),             # How many instances of the buffer to reset to constant and random sequences resp.
          lstmembmult=1e-8,              # multiplier for the token embedding weights. Setting this very low results in a
                                         # good, predictable transition to chaos.
@@ -552,6 +553,23 @@ def go(
         #-- We init the buffer with constant sequences (i.e. those filled with a single repeating token). This ensures
         #   that the LSTM is conditioned on a simple sequence and starts by generating highly regular sequences.
 
+        def rand_batch(length, con, ran):
+            """
+            Generate a batch of constant and random instances.
+
+            :param const: # of constant instances
+            :param rand: # of random instances
+            :param length: Length of the instances
+            :return:
+            """
+            crows = torch.randint(low=0, high=NUM_TOKENS, size=(con, 1), device=lstmdev)
+            crows = crows.tile((1, length))
+            rrows = torch.randint(low=0, high=NUM_TOKENS, size=(ran, length), device=lstmdev)
+
+            rows = torch.cat((crows, rrows), dim=0)
+
+            return rows
+
         def generator_lstm(bs):
 
             # Sample noise from a random model and insert into the buffer
@@ -560,14 +578,11 @@ def go(
                 # replace some random rows in the buffer with constant and random sequences
                 con, ran = lstmreset
 
-                crows = torch.randint(low=0, high=NUM_TOKENS, size=(con, 1), device=lstmdev)
-                crows = crows.tile((1, context))
-                rrows = torch.randint(low=0, high=NUM_TOKENS, size=(ran, context), device=lstmdev)
+                if not lstm_noit:
+                    rows = rand_batch(context, con, ran)
 
-                rows = torch.cat((crows, rrows), dim=0)
-                idx = random.sample(range(buffer_size), rows.size(0))
-
-                buffer[idx] = rows
+                    idx = random.sample(range(buffer_size), rows.size(0))
+                    buffer[idx] = rows
 
                 # Re-initialize the source
                 source.reset_parameters()
@@ -579,13 +594,24 @@ def go(
                 lstm_scale(source.lstm, mult_sample)
                 source.token_embedding.weight.data *= lstmembmult
 
-                # slice a random selection of rows from the buffer (without replacement)
-                iseeds = random.sample(range(buffer.size(0)), source_microbatch_size)
-                iconds = random.sample(range(buffer.size(0)), source_microbatch_size)
+                if lstm_noit: # Ablation: don't refeed the generated noise to the LSTM
 
-                s = random.randrange(0, context - lstmseed)
-                seeds = buffer[iseeds, s:s+lstmseed]
-                conds = buffer[iconds, :]
+                    assert source_microbatch_size == con + ran, 'required for this abalation'
+                    seeds = rand_batch(lstmseed, con, ran)
+                    conds = rand_batch(context, con, ran)
+
+                    # -- In this setting the seeds and conditionals for the LSTM are always random or constant sequences.
+                    #    These are still fed to the buffer and randomly re-sampled in order to simulate an iid sample,
+                    #    but we don't attempt to get extra high-value structure by refeeding structured noise to the LSTM.
+
+                else:
+                    # slice a random selection of rows from the buffer (without replacement)
+                    iseeds = random.sample(range(buffer.size(0)), source_microbatch_size)
+                    iconds = random.sample(range(buffer.size(0)), source_microbatch_size)
+
+                    s = random.randrange(0, context - lstmseed)
+                    seeds = buffer[iseeds, s:s+lstmseed]
+                    conds = buffer[iconds, :]
 
                 chars = source.sample_sequence(seed=seeds,
                                                 max_context=context, num_tokens=NUM_TOKENS,
