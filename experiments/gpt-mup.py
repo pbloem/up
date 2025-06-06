@@ -604,6 +604,8 @@ def go(
                     #    These are still fed to the buffer and randomly re-sampled in order to simulate an iid sample,
                     #    but we don't attempt to get extra high-value structure by refeeding structured noise to the LSTM.
 
+                    iconds = random.sample(range(buffer.size(0)), source_microbatch_size)
+                    # -- these are the indices in the buffer where the data is replaced with the generated data
                 else:
                     # slice a random selection of rows from the buffer (without replacement)
                     iseeds = random.sample(range(buffer.size(0)), source_microbatch_size)
