@@ -596,7 +596,7 @@ def go(
 
                 if lstm_noit: # Ablation: don't refeed the generated noise to the LSTM
 
-                    assert source_microbatch_size == con + ran, 'required for this abalation'
+                    assert source_microbatch_size == con + ran, f'required for this abalation {source_microbatch_size=} {con=} {ran=}'
                     seeds = rand_batch(lstmseed, con, ran)
                     conds = rand_batch(context, con, ran)
 
