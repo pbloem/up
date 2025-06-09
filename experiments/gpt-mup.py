@@ -725,12 +725,14 @@ def go(
 
         # requires: https://github.com/pbloem/neural_networks_solomonoff_induction
         import numpy as np
+        import jax
         from nnsi.data import utm_data_generator as utm
         from nnsi.data import utms as utms_lib
         from nnsi.data import utm_data_generator as utm_dg_lib
 
         def generator_utm(bs):
 
+            rng = jax.random.PRNGKey(0)
             program_sampler = utms_lib.FastSampler(rng=rng)
 
             udg = utm.UTMDataGenerator(
