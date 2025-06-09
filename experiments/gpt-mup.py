@@ -721,6 +721,45 @@ def go(
 
         generator = generator_ndfa
 
+    elif source == 'utm':
+
+        # requires: https://github.com/pbloem/neural_networks_solomonoff_induction
+        import numpy as np
+        from nnsi.data import utm_data_generator as utm
+        from nnsi.data import utms as utms_lib
+        from nnsi.data import utm_data_generator as utm_dg_lib
+
+        def generator_utm(bs):
+
+            program_sampler = utms_lib.FastSampler(rng=rng)
+
+            udg = utm.UTMDataGenerator(
+                batch_size=1,
+                seq_length=512,
+                rng=np.random.default_rng(seed=0),
+                utm=utms_lib.BrainPhoqueUTM(program_sampler),
+                tokenizer=utm_dg_lib.Tokenizer.ASCII,
+                memory_size=64_000,
+                maximum_steps=1_000_000,
+                maximum_program_length=10_000)
+
+            seqs = []
+            for _ in range(bs):
+                # Generate a random mapping of indices, to eliminate the UTM bias for low indices
+                map = list(range(NUM_TOKENS))
+                random.shuffle(map)
+                map = { fr : to for fr, to in enumerate(map)}
+
+                program = udg.sample_params(1)
+                res = udg.sample_from_params(program)
+
+                seq = res[0].argmax(axis=-1)[0]
+                seq = [map[i] for i in seq.tolist()]
+
+            return torch.tensor(seq).to(d())
+
+        generator = generator_utm
+
     else:
         raise Exception(f'Source {source} not recognized')
 
