@@ -741,9 +741,9 @@ def go(
                 rng=np.random.default_rng(seed=0),
                 utm=utms_lib.BrainPhoqueUTM(program_sampler),
                 tokenizer=utm_dg_lib.Tokenizer.ASCII,
-                memory_size=64_000,
-                maximum_steps=1_000_000,
-                maximum_program_length=10_000)
+                memory_size=10,
+                maximum_steps=100,
+                maximum_program_length=100)
 
             seqs = []
             for _ in range(bs):
