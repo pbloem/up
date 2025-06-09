@@ -757,8 +757,9 @@ def go(
 
                 seq = res[0].argmax(axis=-1)[0]
                 seq = [map[i] for i in seq.tolist()]
+                seqs.append(seq)
 
-            return torch.tensor(seq).to(d())
+            return torch.tensor(seqs).to(d())
 
         generator = generator_utm
 
