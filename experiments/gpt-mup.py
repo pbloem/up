@@ -298,6 +298,7 @@ def go(
          utm_mem=10,
          utm_steps=100,
          utm_proglen=100,
+         utm_alphabet=128,
 ):
 
     """
@@ -742,11 +743,14 @@ def go(
                 batch_size=1,
                 seq_length=512,
                 rng=np.random.default_rng(seed=0),
-                utm=utms_lib.BrainPhoqueUTM(program_sampler),
+                utm=utms_lib.BrainPhoqueUTM(
+                    program_sampler,
+                    alphabet_size=utm_alphabet),
                 tokenizer=utm_dg_lib.Tokenizer.ASCII,
                 memory_size=utm_mem,
                 maximum_steps=utm_steps,
-                maximum_program_length=utm_proglen)
+                maximum_program_length=utm_proglen,
+                rep_pad=True)
 
             seqs = []
             for _ in range(bs):
