@@ -734,15 +734,17 @@ def go(
         from nnsi.data import utms as utms_lib
         from nnsi.data import utm_data_generator as utm_dg_lib
 
+        rng = jax.random.PRNGKey(0)
+        rng2 = np.random.default_rng(seed=0)
+
         def generator_utm(bs):
 
-            rng = jax.random.PRNGKey(0)
             program_sampler = utms_lib.FastSampler(rng=rng)
 
             udg = utm.UTMDataGenerator(
                 batch_size=1,
                 seq_length=512,
-                rng=np.random.default_rng(seed=0),
+                rng=rng2,
                 utm=utms_lib.BrainPhoqueUTM(
                     program_sampler,
                     alphabet_size=utm_alphabet),
