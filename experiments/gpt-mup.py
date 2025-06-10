@@ -737,22 +737,22 @@ def go(
         rng = jax.random.PRNGKey(0)
         rng2 = np.random.default_rng(seed=0)
 
+        program_sampler = utms_lib.FastSampler(rng=rng)
+
+        udg = utm.UTMDataGenerator(
+            batch_size=1,
+            seq_length=512,
+            rng=rng2,
+            utm=utms_lib.BrainPhoqueUTM(
+                program_sampler,
+                alphabet_size=utm_alphabet),
+            tokenizer=utm_dg_lib.Tokenizer.ASCII,
+            memory_size=utm_mem,
+            maximum_steps=utm_steps,
+            maximum_program_length=utm_proglen,
+            rep_pad=True)
+
         def generator_utm(bs):
-
-            program_sampler = utms_lib.FastSampler(rng=rng)
-
-            udg = utm.UTMDataGenerator(
-                batch_size=1,
-                seq_length=512,
-                rng=rng2,
-                utm=utms_lib.BrainPhoqueUTM(
-                    program_sampler,
-                    alphabet_size=utm_alphabet),
-                tokenizer=utm_dg_lib.Tokenizer.ASCII,
-                memory_size=utm_mem,
-                maximum_steps=utm_steps,
-                maximum_program_length=utm_proglen,
-                rep_pad=True)
 
             seqs = []
             for _ in range(bs):
@@ -761,8 +761,9 @@ def go(
                 random.shuffle(map)
                 map = { fr : to for fr, to in enumerate(map)}
 
-                program = udg.sample_params(1)
-                res = udg.sample_from_params(program)
+                # program = udg.sample_params(1)
+                # res = udg.sample_from_params(program)
+                res = udg.sample()
 
                 seq = res[0].argmax(axis=-1)[0]
                 seq = [map[i] for i in seq.tolist()]
