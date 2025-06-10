@@ -295,6 +295,9 @@ def go(
                                         # good, predictable transition to chaos.
          lstmgpu=False,                 # Run the LSTM generator on the GPU (doesn't always result in the same dynamics as on CPU)
          eval_test=False,               # Whether to evaluate on the text sets
+         utm_mem=10,
+         utm_steps=100,
+         utm_proglen=100,
 ):
 
     """
@@ -741,9 +744,9 @@ def go(
                 rng=np.random.default_rng(seed=0),
                 utm=utms_lib.BrainPhoqueUTM(program_sampler),
                 tokenizer=utm_dg_lib.Tokenizer.ASCII,
-                memory_size=10,
-                maximum_steps=100,
-                maximum_program_length=100)
+                memory_size=utm_mem,
+                maximum_steps=utm_steps,
+                maximum_program_length=utm_proglen)
 
             seqs = []
             for _ in range(bs):
