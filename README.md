@@ -1,3 +1,5 @@
+_I am in the process of cleaning up this codebase. If you cannot wait for that, everything should work, but it's a bit of a mess. `experiments/gpt-mup.py` is the entry point for the main experiment. If you get stuck feel free to reach out._
+
 # Universal pre-training
 
 ## Installation instructions
