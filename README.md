@@ -2,7 +2,7 @@ _I am in the process of cleaning up this codebase. If you cannot wait for that, 
 
 # Universal pre-training
 
-Codebase for the paper "Universal pre-training by iterated random computation" (soon to be a pre-print).
+Codebase for the paper "Universal pre-training by iterated random computation".
 
 ## Installation instructions
 
